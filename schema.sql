@@ -337,7 +337,14 @@ CREATE TABLE predicates (
   value_schema    jsonb NOT NULL,                       -- JSON Schema for facts.value
   default_ttl_days integer,                             -- NULL = durable, never expires
   volatility      text NOT NULL DEFAULT 'durable',      -- durable|slow|volatile
-  description     text
+  description     text,
+  -- Resolution and projection policy. Persisted rather than read from config at runtime
+  -- because §32 replay must reconstruct a decision from stored rows alone: a tolerance that
+  -- lived only in a YAML file would make replay reflect today's config, not the config that
+  -- actually decided the conflict.
+  read_model_column text,                               -- properties.<column> this projects into
+  tolerance       numeric,                              -- numeric predicates: |a-b| > tolerance is a conflict
+  conflict_escalate boolean NOT NULL DEFAULT false      -- true = a human resolves, not the hierarchy
 );
 
 CREATE TABLE facts (

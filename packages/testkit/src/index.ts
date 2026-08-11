@@ -5,3 +5,5 @@
  */
 
 export { createTestDb, type TestDb } from './db.js';
+
+export { baltimoreMarketId, createProperty, sourceIdByKey } from './fixtures.js';

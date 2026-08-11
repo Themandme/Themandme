@@ -7,3 +7,5 @@
 
 export const PACKAGE_NAME = '@magnolia/core';
 export * from './facts/index.js';
+export * from './read-model/index.js';
+export * from './events/index.js';

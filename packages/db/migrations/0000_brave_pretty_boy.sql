@@ -267,7 +267,10 @@ CREATE TABLE "predicates" (
 	"value_schema" jsonb NOT NULL,
 	"default_ttl_days" integer,
 	"volatility" text DEFAULT 'durable' NOT NULL,
-	"description" text
+	"description" text,
+	"read_model_column" text,
+	"tolerance" numeric,
+	"conflict_escalate" boolean DEFAULT false NOT NULL
 );
 --> statement-breakpoint
 CREATE TABLE "next_actions" (

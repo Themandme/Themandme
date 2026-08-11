@@ -20,3 +20,12 @@ export {
 } from './record-fact.js';
 
 export { getFactProvenance, type FactProvenance } from './provenance.js';
+
+export {
+  detectConflicts,
+  preferredFact,
+  resolveConflict,
+  valuesAgree,
+  type ConflictResolution,
+  type DetectedConflict,
+} from './conflicts.js';

@@ -13,12 +13,12 @@ Current state:
 
 ```
 tables         45  identical
-columns       554  identical apart from 2 expected divergence line(s)
+columns       557  identical apart from 2 expected divergence line(s)
 indexes       106  identical
 fks            70  identical
 checks          2  identical
 enums          19  identical
-defaults      113  identical
+defaults      114  identical
 ```
 
 ---
@@ -95,6 +95,24 @@ Building against it surfaced a real ordering constraint, now documented in `reco
 superseding needs three statements, not two. The unique index requires the old row to stop
 being current _before_ the insert, while `facts_superseded_by_facts_id_fk` requires the new row
 to exist _before_ the old row can point at it. Clear, insert, then link — inside a transaction.
+
+### `predicates` resolution/projection policy columns
+
+```sql
+read_model_column text,
+tolerance         numeric,
+conflict_escalate boolean NOT NULL DEFAULT false
+```
+
+These three came from `config/predicates/v1.yaml` and could have been read from the file at
+runtime. They are persisted instead because spec §13.3 requires deal replay to read **only**
+from persisted rows: a tolerance that decided a conflict, or an escalation flag that sent one
+to a human, has to be recoverable as it was _then_, not as the YAML happens to read later.
+
+This follows the path `sources` already uses — config is authored in `config/`, the seed writes
+it to the database, and services read the database. The file remains the place you edit.
+
+---
 
 ## Not divergences, but worth knowing
 

@@ -1,5 +1,5 @@
 {
-  "id": "a7cb6c14-eee4-4de2-9ca8-992fbfd79d46",
+  "id": "c740796f-75b9-4c4f-8c8e-205da7aaee00",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -2064,6 +2064,25 @@
           "type": "text",
           "primaryKey": false,
           "notNull": false
+        },
+        "read_model_column": {
+          "name": "read_model_column",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "tolerance": {
+          "name": "tolerance",
+          "type": "numeric",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "conflict_escalate": {
+          "name": "conflict_escalate",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
         }
       },
       "indexes": {},

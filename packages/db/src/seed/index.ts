@@ -170,6 +170,9 @@ export async function seed(db: Db): Promise<SeedReport> {
       defaultTtlDays: predicate.default_ttl_days,
       volatility: predicate.volatility,
       description: predicate.description ?? null,
+      readModelColumn: predicate.read_model_column ?? null,
+      tolerance: predicate.tolerance ?? null,
+      conflictEscalate: predicate.conflict_escalate ?? false,
     };
 
     const [existing] = await db

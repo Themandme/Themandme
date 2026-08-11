@@ -5,6 +5,7 @@ import {
   index,
   integer,
   jsonb,
+  numeric,
   pgTable,
   text,
   uniqueIndex,
@@ -31,6 +32,14 @@ export const predicates = pgTable('predicates', {
   defaultTtlDays: integer('default_ttl_days'), // NULL = durable, never expires
   volatility: text('volatility').notNull().default('durable'), // durable|slow|volatile
   description: text('description'),
+
+  /* Resolution and projection policy, seeded from config/predicates/v1.yaml.
+     Persisted rather than read from the file at runtime: spec §13.3 requires replay to read
+     only from persisted rows, so the tolerance that decided a conflict has to be recoverable
+     from the database rather than from whatever the YAML happens to say later. */
+  readModelColumn: text('read_model_column'),
+  tolerance: numeric('tolerance', { mode: 'number' }),
+  conflictEscalate: boolean('conflict_escalate').notNull().default(false),
 });
 
 /**

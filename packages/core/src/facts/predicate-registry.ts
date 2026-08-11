@@ -46,6 +46,12 @@ export interface RegisteredPredicate {
   subject: string;
   volatility: string;
   defaultTtlDays: number | null;
+  /** `properties.<column>` this predicate projects into, if any. Spec §4.1 rule 4. */
+  readModelColumn: string | null;
+  /** Numeric predicates: two current values differing by more than this are in conflict. */
+  tolerance: number | null;
+  /** True = a conflict here goes to a human rather than the source hierarchy (§4.1 rule 6). */
+  conflictEscalate: boolean;
 }
 
 export interface PredicateRegistry {
@@ -53,6 +59,8 @@ export interface PredicateRegistry {
   assert: (predicate: string, value: unknown) => RegisteredPredicate;
   get: (predicate: string) => RegisteredPredicate | undefined;
   keys: () => readonly string[];
+  /** Every predicate that projects into a read-model column. */
+  projecting: () => readonly RegisteredPredicate[];
 }
 
 /** Load every predicate and compile its `value_schema`. */
@@ -84,6 +92,9 @@ export async function loadPredicateRegistry(db: Db): Promise<PredicateRegistry> 
         subject: row.subject,
         volatility: row.volatility,
         defaultTtlDays: row.defaultTtlDays,
+        readModelColumn: row.readModelColumn,
+        tolerance: row.tolerance,
+        conflictEscalate: row.conflictEscalate,
       },
       validate,
     });
@@ -105,5 +116,7 @@ export async function loadPredicateRegistry(db: Db): Promise<PredicateRegistry> 
     },
     get: (predicate) => compiled.get(predicate)?.def,
     keys: () => [...compiled.keys()],
+    projecting: () =>
+      [...compiled.values()].map((e) => e.def).filter((d) => d.readModelColumn !== null),
   };
 }

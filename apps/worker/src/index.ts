@@ -1,8 +1,15 @@
 /**
  * @magnolia/worker — BullMQ processors and schedulers.
  *
- * Populated by BUILD_PLAN M1 (outbox publisher) onward: ingestion scheduling (M2), the signal
- * engine sweep (M3), lifecycle and stall detection (M3, M11), calibration (M12).
+ * Ships with the outbox publisher (BUILD_PLAN M1.6). Ingestion scheduling (M2), the signal
+ * engine sweep (M3), lifecycle and stall detection (M3, M11) and calibration (M12) follow.
  */
 
 export const APP_NAME = '@magnolia/worker';
+
+export {
+  createPublisher,
+  OUTBOX_QUEUE_NAME,
+  type Publisher,
+  type PublisherOptions,
+} from './publisher.js';
