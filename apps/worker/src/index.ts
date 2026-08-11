@@ -13,3 +13,12 @@ export {
   type Publisher,
   type PublisherOptions,
 } from './publisher.js';
+
+export {
+  fetchIntoRawRecords,
+  formatReport,
+  ingestSource,
+  normalizePending,
+  payloadHash,
+  type IngestReport,
+} from './ingest/run-ingest.js';

@@ -32,3 +32,11 @@ export {
   normalizeVacantBuildingNotice,
   VBN_FIELDS,
 } from './adapters/baltimore-vbn.js';
+
+export {
+  createAdapterRegistry,
+  SourceDisabledError,
+  SourceNotRegisteredError,
+  SourceRowMissingError,
+  type AdapterRegistry,
+} from './registry.js';

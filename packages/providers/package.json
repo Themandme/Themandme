@@ -7,6 +7,8 @@
     ".": "./src/index.ts"
   },
   "dependencies": {
-    "@magnolia/core": "workspace:*"
+    "@magnolia/core": "workspace:*",
+    "@magnolia/db": "workspace:*",
+    "drizzle-orm": "^0.45.2"
   }
 }

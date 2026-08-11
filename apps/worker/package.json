@@ -10,7 +10,13 @@
     "@magnolia/config": "workspace:*",
     "@magnolia/core": "workspace:*",
     "@magnolia/db": "workspace:*",
+    "@magnolia/providers": "workspace:*",
     "bullmq": "^6.0.11",
-    "ioredis": "^6.0.0"
+    "drizzle-orm": "^0.45.2",
+    "ioredis": "^6.0.0",
+    "uuid": "^14.0.1"
+  },
+  "devDependencies": {
+    "@magnolia/testkit": "workspace:*"
   }
 }
