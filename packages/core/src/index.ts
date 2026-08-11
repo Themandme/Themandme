@@ -1,0 +1,8 @@
+/**
+ * @magnolia/core — Domain types, fact ledger, signal engine, scoring, router.
+ *
+ * Populated by BUILD_PLAN M1-M3. M0 establishes the package boundary and its build,
+ * lint and type rails only; no domain logic lives here yet.
+ */
+
+export const PACKAGE_NAME = '@magnolia/core';

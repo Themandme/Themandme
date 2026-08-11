@@ -1,0 +1,17 @@
+node_modules/
+dist/
+build/
+coverage/
+.next/
+*.tsbuildinfo
+
+# Secrets. .env.example is committed; .env never is.
+.env
+.env.*
+!.env.example
+
+.DS_Store
+*.log
+npm-debug.log*
+.vitest-cache/
+.eslintcache

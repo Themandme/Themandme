@@ -1,0 +1,12 @@
+node_modules
+dist
+build
+coverage
+.next
+pnpm-lock.yaml
+
+# Specification documents are carried in verbatim from the source material.
+# Reformatting them would create spurious diffs against the originals.
+CLAUDE.md
+BUILD_PLAN.md
+MAGNOLIA_V1_TECH_SPEC.md

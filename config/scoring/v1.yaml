@@ -1,0 +1,60 @@
+# Magnolia V1 scoring configuration. Verbatim from MAGNOLIA_V1_TECH_SPEC.md §6.2.
+#
+# CLAUDE.md: "Scoring weights, sequences, cohorts, and market parameters live in `config/`,
+# never in code." This file is loaded and zod-validated at boot; the `version` string is
+# embedded in every `score_runs` and `opportunity_routes` row so a score is reproducible.
+#
+# Spec §6.2 MUST: `base_p_pay` values are deliberately pessimistic priors. They are replaced by
+# observed rates once a calibration bucket reaches n >= 30 (§13.2). Do not tune them upward to
+# make the dashboard look better.
+#
+# The scoring engine that consumes this is M3. M0 ships the file and its validation only.
+
+version: '2026.08.01'
+
+gate:
+  ev_multiple: 3.0
+  skiptrace_min_rank: 40
+  ai_briefing_min_rank: 55
+
+bootstrap:
+  # §14: probability and speed dominate payout size.
+  weights:
+    p_pay: 0.40
+    speed: 0.25
+    cost: 0.20
+    human_effort: 0.10
+    payout: 0.05
+  speed_halflife_days: 30 # speed_score = 0.5 ^ (days/halflife)
+  payout_log_base: 10 # payout_score = log(payout_usd)/log(base), capped at 1
+
+signals:
+  weights:
+    vacancy.vbn_open: 0.25
+    tax.on_sale_list: 0.22
+    tax.delinquent: 0.15
+    code.receivership: 0.20
+    code.violation_open: 0.10
+    owner.absentee: 0.12
+    owner.out_of_state: 0.08
+    owner.long_hold: 0.08
+    owner.entity: 0.05
+    land.adjacent_cluster: 0.15
+  combination: bounded_sum # 1 - prod(1 - w_i * strength_i)
+
+engines:
+  wholesale:
+    base_p_pay: 0.06 # cold outreach -> closed assignment, honest prior
+    min_spread_cents: 250000
+    default_days_to_cash: 45
+    default_human_minutes: 120
+  land:
+    base_p_pay: 0.04
+    default_days_to_cash: 60
+    default_human_minutes: 90
+    require_buyer_match: true
+  recovery:
+    base_p_pay: 0.20
+    default_days_to_cash: 60
+    default_human_minutes: 60
+    outreach_enabled: false # §2.5

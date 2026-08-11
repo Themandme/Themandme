@@ -1,0 +1,40 @@
+services:
+  postgres:
+    image: postgis/postgis:16-3.4
+    container_name: magnolia-postgres
+    environment:
+      POSTGRES_USER: magnolia
+      POSTGRES_PASSWORD: magnolia
+      POSTGRES_DB: magnolia
+    ports:
+      - '5432:5432'
+    volumes:
+      - magnolia-pgdata:/var/lib/postgresql/data
+      # Runs once, on first initialisation of an empty data volume.
+      # `pnpm db:reset` drops the volume so these re-run.
+      - ./docker/postgres/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U magnolia -d magnolia']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+  redis:
+    image: redis:7-alpine
+    container_name: magnolia-redis
+    command: ['redis-server', '--appendonly', 'yes']
+    ports:
+      - '6379:6379'
+    volumes:
+      - magnolia-redisdata:/data
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 5s
+
+volumes:
+  magnolia-pgdata:
+  magnolia-redisdata:
