@@ -19,7 +19,7 @@ import {
  * rows production gets — a hand-built fixture would drift from config/predicates/v1.yaml.
  */
 
-let harness: TestDb;
+let harness: TestDb | undefined;
 let db: Db;
 let registry: PredicateRegistry;
 const sourceIds = new Map<string, string>();
@@ -64,7 +64,9 @@ beforeAll(async () => {
 }, 60_000);
 
 afterAll(async () => {
-  await harness.drop();
+  /* Guarded: when beforeAll fails (an unreachable database, say) `harness` is undefined, and
+     an unguarded teardown buries the real error under a TypeError cascade. */
+  if (harness !== undefined) await harness.drop();
 });
 
 beforeEach(async () => {

@@ -1,8 +1,34 @@
-/**
- * @magnolia/providers — Adapter interfaces and implementations (data, comms, skiptrace, llm).
- *
- * Populated by BUILD_PLAN M2, M6, M7, M9. M0 establishes the package boundary and its build,
- * lint and type rails only; no domain logic lives here yet.
- */
+export type {
+  DataSourceAdapter,
+  EpistemicLevel,
+  HealthStatus,
+  NormalizedFact,
+  PropertyRef,
+  RawRecord,
+  SourceTier,
+} from './types.js';
 
-export const PACKAGE_NAME = '@magnolia/providers';
+export {
+  ArcGisError,
+  asNumber,
+  asString,
+  dollarsToCents,
+  epochToDate,
+  layerCount,
+  queryAll,
+  type ArcGisLayer,
+  type ArcGisQuery,
+} from './arcgis/client.js';
+
+export {
+  createSdatParcelPointsAdapter,
+  normalizeSdatParcelPoint,
+  parseSdatDate,
+  SDAT_FIELDS,
+} from './adapters/sdat-parcel-points.js';
+
+export {
+  createBaltimoreVbnAdapter,
+  normalizeVacantBuildingNotice,
+  VBN_FIELDS,
+} from './adapters/baltimore-vbn.js';

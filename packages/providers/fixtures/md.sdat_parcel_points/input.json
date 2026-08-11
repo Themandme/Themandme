@@ -1,0 +1,160 @@
+{
+  "capturedAt": "2026-08-11",
+  "features": [
+    {
+      "attributes": {
+        "ACCTID": "0301011738 004",
+        "ADDRESS": "2107 E BALTIMORE ST",
+        "BLOCK": "1738",
+        "CITY": "BALTIMORE",
+        "CONSIDR1": 133250,
+        "DESCLU": "Residential",
+        "JURSCODE": "BACI",
+        "LOT": "4",
+        "NFMTTLVL": 590100,
+        "OWNADD1": "2107 E BALTIMORE ST",
+        "OWNADD2": null,
+        "OWNCITY": "BALTIMORE",
+        "OWNERZIP": "21231",
+        "OWNSTATE": "MD",
+        "SQFTSTRC": 2886,
+        "STRTDIR": "E",
+        "STRTNAM": "BALTIMORE",
+        "STRTNUM": 2107,
+        "STRTTYP": "ST",
+        "STRTUNT": null,
+        "TRADATE": "19950725",
+        "YEARBLT": "1914",
+        "ZIPCODE": "21231"
+      },
+      "geometry": {
+        "x": -76.5870720072963,
+        "y": 39.291574805412345
+      }
+    },
+    {
+      "attributes": {
+        "ACCTID": "0301011738 005",
+        "ADDRESS": "2109 E BALTIMORE ST",
+        "BLOCK": "1738",
+        "CITY": "BALTIMORE",
+        "CONSIDR1": 657500,
+        "DESCLU": "Residential",
+        "JURSCODE": "BACI",
+        "LOT": "5",
+        "NFMTTLVL": 710800,
+        "OWNADD1": "2109 E BALTIMORE ST",
+        "OWNADD2": null,
+        "OWNCITY": "BALTIMORE",
+        "OWNERZIP": "21231",
+        "OWNSTATE": "MD",
+        "SQFTSTRC": 2886,
+        "STRTDIR": "E",
+        "STRTNAM": "BALTIMORE",
+        "STRTNUM": 2109,
+        "STRTTYP": "ST",
+        "STRTUNT": null,
+        "TRADATE": "20130826",
+        "YEARBLT": "1910",
+        "ZIPCODE": "21231"
+      },
+      "geometry": {
+        "x": -76.58700128203566,
+        "y": 39.29157725890065
+      }
+    },
+    {
+      "attributes": {
+        "ACCTID": "0301011738 006",
+        "ADDRESS": "2111 E BALTIMORE ST",
+        "BLOCK": "1738",
+        "CITY": "BALTIMORE",
+        "CONSIDR1": null,
+        "DESCLU": "Residential",
+        "JURSCODE": "BACI",
+        "LOT": "6",
+        "NFMTTLVL": 559900,
+        "OWNADD1": "2111 E BALTIMORE ST",
+        "OWNADD2": null,
+        "OWNCITY": "BALTIMORE",
+        "OWNERZIP": "21231",
+        "OWNSTATE": "MD",
+        "SQFTSTRC": 2886,
+        "STRTDIR": "E",
+        "STRTNAM": "BALTIMORE",
+        "STRTNUM": 2111,
+        "STRTTYP": "ST",
+        "STRTUNT": null,
+        "TRADATE": null,
+        "YEARBLT": "1914",
+        "ZIPCODE": "21231"
+      },
+      "geometry": {
+        "x": -76.58693288071667,
+        "y": 39.291578820400986
+      }
+    },
+    {
+      "attributes": {
+        "ACCTID": "0301011738 007",
+        "ADDRESS": "2113 E BALTIMORE ST",
+        "BLOCK": "1738",
+        "CITY": "BALTIMORE",
+        "CONSIDR1": null,
+        "DESCLU": "Residential",
+        "JURSCODE": "BACI",
+        "LOT": "7",
+        "NFMTTLVL": 549200,
+        "OWNADD1": "2113 E BALTIMORE ST",
+        "OWNADD2": null,
+        "OWNCITY": "BALTIMORE",
+        "OWNERZIP": "21231",
+        "OWNSTATE": "MD",
+        "SQFTSTRC": 2886,
+        "STRTDIR": "E",
+        "STRTNAM": "BALTIMORE",
+        "STRTNUM": 2113,
+        "STRTTYP": "ST",
+        "STRTUNT": null,
+        "TRADATE": "20001024",
+        "YEARBLT": "1914",
+        "ZIPCODE": "21231"
+      },
+      "geometry": {
+        "x": -76.58686793521657,
+        "y": 39.29158399643363
+      }
+    },
+    {
+      "attributes": {
+        "ACCTID": "0301011738 012",
+        "ADDRESS": "2125 E BALTIMORE ST",
+        "BLOCK": "1738",
+        "CITY": "BALTIMORE",
+        "CONSIDR1": 185000,
+        "DESCLU": "Residential",
+        "JURSCODE": "BACI",
+        "LOT": "12",
+        "NFMTTLVL": 372200,
+        "OWNADD1": "2125 E BALTIMORE ST",
+        "OWNADD2": null,
+        "OWNCITY": "BALTIMORE",
+        "OWNERZIP": "21231",
+        "OWNSTATE": "MD",
+        "SQFTSTRC": 2112,
+        "STRTDIR": "E",
+        "STRTNAM": "BALTIMORE",
+        "STRTNUM": 2125,
+        "STRTTYP": "ST",
+        "STRTUNT": null,
+        "TRADATE": "20000425",
+        "YEARBLT": "1914",
+        "ZIPCODE": "21231"
+      },
+      "geometry": {
+        "x": -76.58649328114923,
+        "y": 39.291624112933015
+      }
+    }
+  ]
+}

@@ -114,6 +114,23 @@ it to the database, and services read the database. The file remains the place y
 
 ---
 
+### `normalize()` returns `NormalizedFact[]`, not `FactDraft[]`
+
+Spec §9.1 declares `normalize(raw: RawRecord): FactDraft[]` and, in the same paragraph, requires
+that `normalize` be **pure and side-effect-free**. Those cannot both hold: `FactDraft` carries a
+`subjectId`, a property UUID that only exists after a database lookup.
+
+So `normalize` returns `NormalizedFact[]`, which names its subject by natural key
+(`PropertyRef`: apn, blocklot, address, centroid, owner name) rather than by id. The ingestion
+pipeline resolves that reference to a property and then calls `recordFact` with a real
+`subjectId`.
+
+Purity is the half worth keeping. It is what makes the golden-fixture requirement in the same
+section work at all — the fixture test runs `normalize` with no database, so upstream schema
+drift fails a test instead of silently writing garbage facts.
+
+---
+
 ## Not divergences, but worth knowing
 
 **Constraint and index names.** Drizzle auto-names constraints

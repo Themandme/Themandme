@@ -1,0 +1,182 @@
+[
+  {
+    "subject": {
+      "apn": null,
+      "blocklot": "0702 050",
+      "addressLine1": "2113 WILKENS AVE",
+      "addressLine2": null,
+      "city": "BALTIMORE",
+      "stateCode": "MD",
+      "postalCode": null,
+      "centroid": [-76.64942828981864, 39.280849515110766],
+      "ownerName": null
+    },
+    "predicate": "vacancy.vbn_open",
+    "value": true,
+    "epistemic": "fact",
+    "observedAt": "2026-05-28T13:13:00.000Z",
+    "confidence": 0.95
+  },
+  {
+    "subject": {
+      "apn": null,
+      "blocklot": "0702 050",
+      "addressLine1": "2113 WILKENS AVE",
+      "addressLine2": null,
+      "city": "BALTIMORE",
+      "stateCode": "MD",
+      "postalCode": null,
+      "centroid": [-76.64942828981864, 39.280849515110766],
+      "ownerName": null
+    },
+    "predicate": "vacancy.vbn_opened_at",
+    "value": "2026-05-28",
+    "epistemic": "fact",
+    "observedAt": "2026-05-28T13:13:00.000Z",
+    "confidence": 0.95
+  },
+  {
+    "subject": {
+      "apn": null,
+      "blocklot": "0702 052",
+      "addressLine1": "2109 WILKENS AVE",
+      "addressLine2": null,
+      "city": "BALTIMORE",
+      "stateCode": "MD",
+      "postalCode": null,
+      "centroid": [-76.64933994282087, 39.28087832437162],
+      "ownerName": null
+    },
+    "predicate": "vacancy.vbn_open",
+    "value": true,
+    "epistemic": "fact",
+    "observedAt": "2010-07-17T10:50:00.000Z",
+    "confidence": 0.95
+  },
+  {
+    "subject": {
+      "apn": null,
+      "blocklot": "0702 052",
+      "addressLine1": "2109 WILKENS AVE",
+      "addressLine2": null,
+      "city": "BALTIMORE",
+      "stateCode": "MD",
+      "postalCode": null,
+      "centroid": [-76.64933994282087, 39.28087832437162],
+      "ownerName": null
+    },
+    "predicate": "vacancy.vbn_opened_at",
+    "value": "2010-07-17",
+    "epistemic": "fact",
+    "observedAt": "2010-07-17T10:50:00.000Z",
+    "confidence": 0.95
+  },
+  {
+    "subject": {
+      "apn": null,
+      "blocklot": "0702 056",
+      "addressLine1": "2101 WILKENS AVE",
+      "addressLine2": null,
+      "city": "BALTIMORE",
+      "stateCode": "MD",
+      "postalCode": null,
+      "centroid": [-76.6491626179911, 39.28093877820772],
+      "ownerName": null
+    },
+    "predicate": "vacancy.vbn_open",
+    "value": true,
+    "epistemic": "fact",
+    "observedAt": "2008-06-26T16:27:00.000Z",
+    "confidence": 0.95
+  },
+  {
+    "subject": {
+      "apn": null,
+      "blocklot": "0702 056",
+      "addressLine1": "2101 WILKENS AVE",
+      "addressLine2": null,
+      "city": "BALTIMORE",
+      "stateCode": "MD",
+      "postalCode": null,
+      "centroid": [-76.6491626179911, 39.28093877820772],
+      "ownerName": null
+    },
+    "predicate": "vacancy.vbn_opened_at",
+    "value": "2008-06-26",
+    "epistemic": "fact",
+    "observedAt": "2008-06-26T16:27:00.000Z",
+    "confidence": 0.95
+  },
+  {
+    "subject": {
+      "apn": null,
+      "blocklot": "0703 002",
+      "addressLine1": "2003 WILKENS AVE",
+      "addressLine2": null,
+      "city": "BALTIMORE",
+      "stateCode": "MD",
+      "postalCode": null,
+      "centroid": [-76.64782998379904, 39.28136169800413],
+      "ownerName": null
+    },
+    "predicate": "vacancy.vbn_open",
+    "value": true,
+    "epistemic": "fact",
+    "observedAt": "2024-02-01T10:08:00.000Z",
+    "confidence": 0.95
+  },
+  {
+    "subject": {
+      "apn": null,
+      "blocklot": "0703 002",
+      "addressLine1": "2003 WILKENS AVE",
+      "addressLine2": null,
+      "city": "BALTIMORE",
+      "stateCode": "MD",
+      "postalCode": null,
+      "centroid": [-76.64782998379904, 39.28136169800413],
+      "ownerName": null
+    },
+    "predicate": "vacancy.vbn_opened_at",
+    "value": "2024-02-01",
+    "epistemic": "fact",
+    "observedAt": "2024-02-01T10:08:00.000Z",
+    "confidence": 0.95
+  },
+  {
+    "subject": {
+      "apn": null,
+      "blocklot": "0703 005",
+      "addressLine1": "2009 WILKENS AVE",
+      "addressLine2": null,
+      "city": "BALTIMORE",
+      "stateCode": "MD",
+      "postalCode": null,
+      "centroid": [-76.6479686628331, 39.281318134036404],
+      "ownerName": null
+    },
+    "predicate": "vacancy.vbn_open",
+    "value": true,
+    "epistemic": "fact",
+    "observedAt": "2021-11-05T12:41:00.000Z",
+    "confidence": 0.95
+  },
+  {
+    "subject": {
+      "apn": null,
+      "blocklot": "0703 005",
+      "addressLine1": "2009 WILKENS AVE",
+      "addressLine2": null,
+      "city": "BALTIMORE",
+      "stateCode": "MD",
+      "postalCode": null,
+      "centroid": [-76.6479686628331, 39.281318134036404],
+      "ownerName": null
+    },
+    "predicate": "vacancy.vbn_opened_at",
+    "value": "2021-11-05",
+    "epistemic": "fact",
+    "observedAt": "2021-11-05T12:41:00.000Z",
+    "confidence": 0.95
+  }
+]

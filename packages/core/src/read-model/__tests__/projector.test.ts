@@ -12,7 +12,7 @@ import { computeProjection, projectAll, projectProperty } from '../project-prope
  * "any sequence of fact writes leaves the read model equal to a from-scratch recomputation."
  */
 
-let harness: TestDb;
+let harness: TestDb | undefined;
 let db: Db;
 let registry: PredicateRegistry;
 
@@ -53,7 +53,9 @@ beforeAll(async () => {
 }, 60_000);
 
 afterAll(async () => {
-  await harness.drop();
+  /* Guarded: when beforeAll fails (an unreachable database, say) `harness` is undefined, and
+     an unguarded teardown buries the real error under a TypeError cascade. */
+  if (harness !== undefined) await harness.drop();
 });
 
 beforeEach(async () => {

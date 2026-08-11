@@ -134,7 +134,11 @@ importers:
         specifier: ^0.31.10
         version: 0.31.10
 
-  packages/providers: {}
+  packages/providers:
+    dependencies:
+      '@magnolia/core':
+        specifier: workspace:*
+        version: link:../core
 
   packages/testkit:
     dependencies:
