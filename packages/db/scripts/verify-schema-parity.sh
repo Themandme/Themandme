@@ -17,7 +17,19 @@ set -euo pipefail
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 SCHEMA_SQL="$REPO_ROOT/schema.sql"
 MIGRATION="$(ls "$REPO_ROOT"/packages/db/migrations/0000_*.sql)"
-PSQL=(docker compose -f "$REPO_ROOT/docker-compose.yml" exec -T postgres psql -U magnolia)
+# Two ways to reach Postgres:
+#   direct  — a psql on PATH talking to PGHOST/PGPORT. What CI uses, where Postgres is a
+#             service container rather than a compose stack.
+#   compose — the default for local development.
+# Set PARITY_PSQL_MODE=direct to force the former.
+if [ "${PARITY_PSQL_MODE:-compose}" = "direct" ]; then
+  export PGHOST="${PGHOST:-localhost}"
+  export PGPORT="${PGPORT:-5432}"
+  export PGPASSWORD="${PGPASSWORD:-magnolia}"
+  PSQL=(psql -U magnolia)
+else
+  PSQL=(docker compose -f "$REPO_ROOT/docker-compose.yml" exec -T postgres psql -U magnolia)
+fi
 WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
 

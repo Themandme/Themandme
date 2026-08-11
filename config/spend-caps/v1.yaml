@@ -1,0 +1,64 @@
+# Spend caps. Spec §5.1 gate rule 2, §14.
+#
+# Deliberately conservative. Spec M14.4 suggests starting at $200/month global; these seed
+# values sit at or below that. Raising them is a config change with a visible diff, which is
+# the point — a cap that drifts upward quietly is not a cap.
+#
+# `hard_stop: true` means the gate DENIES on exceed rather than warning. §5.1: requestStage
+# throws BudgetExceeded; it never returns a soft false a caller can ignore.
+#
+# Note that with every spend flag off (config/feature-flags/v1.yaml) nothing can spend at all
+# on a freshly seeded database. These caps are the second layer, not the first.
+
+caps:
+  # ── Global ────────────────────────────────────────────────────────────────────────────
+  - scope: global
+    period: month
+    cap_cents: 20000 # $200.00 — spec M14.4's suggested starting point
+    hard_stop: true
+
+  - scope: global
+    period: day
+    cap_cents: 2000 # $20.00 — bounds the blast radius of a runaway loop to one day
+    hard_stop: true
+
+  # ── Market ────────────────────────────────────────────────────────────────────────────
+  - scope: market:baltimore_city_md
+    period: month
+    cap_cents: 20000
+    hard_stop: true
+
+  # ── Category (§5) ─────────────────────────────────────────────────────────────────────
+  # T3 paid data is the expensive tier; skip trace is per-lookup priced.
+  - scope: category:skiptrace
+    period: month
+    cap_cents: 5000 # $50.00
+    hard_stop: true
+
+  - scope: category:llm
+    period: month
+    # §5.2 targets LLM cost per qualified opportunity under $0.10, with batching and caching.
+    cap_cents: 5000
+    hard_stop: true
+
+  - scope: category:mail
+    period: month
+    cap_cents: 10000 # $100.00 — direct mail is a permitted cold channel (§2.1)
+    hard_stop: true
+
+  - scope: category:sms
+    period: month
+    cap_cents: 1000
+    hard_stop: true
+
+  - scope: category:voice
+    period: month
+    cap_cents: 2000
+    hard_stop: true
+
+  # ── Per-opportunity lifetime ──────────────────────────────────────────────────────────
+  # §5.1 rule 4 also bounds this by route.payout_p50 * 0.15; the gate takes the lower.
+  - scope: opportunity
+    period: lifetime
+    cap_cents: 5000 # $50.00, matching market config max_spend_per_opportunity_cents
+    hard_stop: true

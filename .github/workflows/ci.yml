@@ -17,7 +17,28 @@ jobs:
   check:
     name: lint · typecheck · test
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
+
+    services:
+      # M1 introduced DB-backed tests, and they fail rather than skip when Postgres is missing
+      # (see packages/testkit/src/db.ts). A skipped test is indistinguishable from a passing
+      # one, so the database is a hard requirement of the run, not an optional extra.
+      postgres:
+        image: postgis/postgis:16-3.4
+        env:
+          POSTGRES_USER: magnolia
+          POSTGRES_PASSWORD: magnolia
+          POSTGRES_DB: magnolia
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -h 127.0.0.1 -U magnolia -d magnolia"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+
+    env:
+      DATABASE_URL: postgres://magnolia:magnolia@localhost:5432/magnolia
 
     steps:
       - uses: actions/checkout@v4
@@ -42,5 +63,19 @@ jobs:
       - name: Typecheck
         run: pnpm typecheck
 
+      # The service container image does not run our docker/postgres/init scripts, so the
+      # extensions come from the migration's prepended CREATE EXTENSION block.
+      - name: Apply migrations
+        run: pnpm --filter @magnolia/db migrate
+
       - name: Test
         run: pnpm test
+
+      # Proves the Drizzle schema still matches schema.sql. Runs against the same service
+      # container rather than docker compose, so it needs the psql client.
+      - name: Schema parity
+        run: |
+          sudo apt-get update && sudo apt-get install -y --no-install-recommends postgresql-client
+          ./packages/db/scripts/verify-schema-parity.sh
+        env:
+          PARITY_PSQL_MODE: direct

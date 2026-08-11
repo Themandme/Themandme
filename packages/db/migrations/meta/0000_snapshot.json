@@ -1,5 +1,5 @@
 {
-  "id": "ad8c2b08-b29b-4072-bab0-7fd4c338ae86",
+  "id": "a7cb6c14-eee4-4de2-9ca8-992fbfd79d46",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -1897,6 +1897,40 @@
             }
           ],
           "isUnique": false,
+          "where": "\"facts\".\"is_current\"",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "facts_one_current_per_source": {
+          "name": "facts_one_current_per_source",
+          "columns": [
+            {
+              "expression": "subject_type",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "subject_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "predicate",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "source_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
           "where": "\"facts\".\"is_current\"",
           "concurrently": false,
           "method": "btree",

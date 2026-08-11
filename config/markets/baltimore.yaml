@@ -1,0 +1,38 @@
+# Baltimore City, Maryland — the V1 market. Spec §3, §7.1.
+#
+# CLAUDE.md: market parameters live in config/, never in code. Every value here is read by the
+# seed and by services at runtime; none of them has a code-level fallback.
+
+key: baltimore_city_md
+display_name: Baltimore City, MD
+state_code: MD
+fips_county: '24510'
+timezone: America/New_York
+status: pilot
+
+config:
+  # §7.1 lifecycle. No activity for aging_days -> aging; stale_days -> stale. A stale
+  # opportunity stops consuming paid stages entirely (T0/T1 only).
+  aging_days: 14
+  stale_days: 45
+
+  # §8.2 `frequency.cap`. Deny above these. Defaults from the spec text.
+  max_touches_per_person_per_week: 3
+  max_touches_per_person_per_day: 1
+
+  # §5.1 gate rule 5: T3/T4 denied if the driving signal set is older than this.
+  max_signal_age_days: 30
+
+  # §5.1 gate rule 4: cumulative per-opportunity ceiling, alongside route.payout_p50 * 0.15.
+  max_spend_per_opportunity_cents: 5000
+
+  # §8.2 `calling.window` — local time of the CALLED party, not of the operator.
+  calling_window_start_hour: 8
+  calling_window_end_hour: 21
+
+  # §6.4 recovery payout = verified_surplus * allowable_fee_rate.
+  # [VERIFY] Spec §2.5: whether Magnolia may charge a finder's fee for Maryland surplus
+  # recovery at all, under what cap, and with what contract terms is an open question for
+  # counsel. This value is deliberately null so that any code reading it fails loudly rather
+  # than computing a payout from a guessed rate. Recovery outreach is flag-gated regardless.
+  recovery_allowable_fee_rate: null

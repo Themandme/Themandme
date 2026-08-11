@@ -6,3 +6,4 @@
  */
 
 export const PACKAGE_NAME = '@magnolia/core';
+export * from './facts/index.js';

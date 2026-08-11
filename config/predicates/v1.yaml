@@ -1,0 +1,267 @@
+# Predicate registry. Spec §4.1.
+#
+# Every predicate a fact may use is declared here. Writing a fact with an unregistered
+# predicate throws (the FK on facts.predicate makes it a database guarantee); writing a value
+# that fails `value_schema` throws (packages/core/src/facts/predicate-registry.ts).
+#
+# Fields:
+#   subject             which subject_kind the predicate attaches to
+#   volatility          durable | slow | volatile  — drives refresh (§4.1)
+#   default_ttl_days    null for durable, 180 for slow, 30 for volatile
+#   value_schema        JSON Schema for facts.value. Values are bare JSON scalars unless the
+#                       schema says otherwise.
+#   read_model_column   properties.<column> this predicate projects into, if any (§4.1 rule 4).
+#                       Only scalar predicates map; the projector is the only writer.
+#   tolerance           numeric predicates only. Two current facts from different sources are
+#                       in conflict when |a - b| > tolerance. Absent means exact equality.
+#   conflict_escalate   true = a conflict here goes to a human rather than being auto-resolved
+#                       by the source hierarchy (§4.1 rule 6).
+
+predicates:
+  # ── Structure and identity (durable) ──────────────────────────────────────────────────
+  - key: property.property_type
+    subject: property
+    volatility: durable
+    default_ttl_days: null
+    read_model_column: property_type
+    description: Dwelling type as classified by the assessor.
+    value_schema:
+      type: string
+      minLength: 1
+      maxLength: 64
+
+  - key: property.year_built
+    subject: property
+    volatility: durable
+    default_ttl_days: null
+    read_model_column: year_built
+    tolerance: 1 # assessors and permit records routinely differ by a year
+    description: Year the primary structure was built.
+    value_schema:
+      type: integer
+      minimum: 1600
+      maximum: 2100
+
+  - key: property.building_sqft
+    subject: property
+    volatility: durable
+    default_ttl_days: null
+    read_model_column: building_sqft
+    tolerance: 50 # measurement method varies between sources
+    description: Above-grade finished area.
+    value_schema:
+      type: integer
+      minimum: 0
+      maximum: 1000000
+
+  - key: property.lot_sqft
+    subject: property
+    volatility: durable
+    default_ttl_days: null
+    read_model_column: lot_sqft
+    tolerance: 100
+    description: Lot area.
+    value_schema:
+      type: integer
+      minimum: 0
+      maximum: 100000000
+
+  - key: property.beds
+    subject: property
+    volatility: durable
+    default_ttl_days: null
+    read_model_column: beds
+    description: Bedroom count.
+    value_schema:
+      type: number
+      minimum: 0
+      maximum: 100
+
+  - key: property.baths
+    subject: property
+    volatility: durable
+    default_ttl_days: null
+    read_model_column: baths
+    description: Bathroom count; halves are meaningful.
+    value_schema:
+      type: number
+      minimum: 0
+      maximum: 100
+
+  - key: property.is_vacant_land
+    subject: property
+    volatility: durable
+    default_ttl_days: null
+    read_model_column: is_vacant_land
+    description: No structure present. Drives the land.vacant_lot signal.
+    value_schema:
+      type: boolean
+
+  - key: land.use_code
+    subject: property
+    volatility: durable
+    default_ttl_days: null
+    description: Assessor land-use code; the lot set drives land.vacant_lot.
+    value_schema:
+      type: string
+      minLength: 1
+      maxLength: 32
+
+  # ── Valuation and ownership (slow, 180d) ──────────────────────────────────────────────
+  - key: property.zoning_code
+    subject: property
+    volatility: slow
+    default_ttl_days: 180
+    read_model_column: zoning_code
+    description: Zoning designation.
+    value_schema:
+      type: string
+      minLength: 1
+      maxLength: 32
+
+  - key: property.assessed_value_cents
+    subject: property
+    volatility: slow
+    default_ttl_days: 180
+    read_model_column: assessed_value_cents
+    tolerance: 0 # assessments are authoritative; a difference is a real disagreement
+    description: Assessed value in integer cents.
+    value_schema:
+      type: integer
+      minimum: 0
+
+  - key: property.last_sale_date
+    subject: property
+    volatility: slow
+    default_ttl_days: 180
+    read_model_column: last_sale_date
+    description: Date of the most recent recorded transfer (ISO-8601 date).
+    value_schema:
+      type: string
+      format: date
+
+  - key: property.last_sale_price_cents
+    subject: property
+    volatility: slow
+    default_ttl_days: 180
+    read_model_column: last_sale_price_cents
+    tolerance: 0
+    description: Consideration on the most recent transfer, in integer cents.
+    value_schema:
+      type: integer
+      minimum: 0
+
+  - key: owner.mailing_address
+    subject: property
+    volatility: slow
+    default_ttl_days: 180
+    # Drives owner.absentee. A wrong value here sends mail to the wrong person, so a
+    # cross-source disagreement is a human decision, not a tier lookup.
+    conflict_escalate: true
+    description: Owner's mailing address of record, normalized.
+    value_schema:
+      type: object
+      required: [line1, city, state, postal_code]
+      additionalProperties: false
+      properties:
+        line1: { type: string, minLength: 1 }
+        line2: { type: [string, 'null'] }
+        city: { type: string, minLength: 1 }
+        state: { type: string, minLength: 2, maxLength: 2 }
+        postal_code: { type: string, minLength: 5 }
+
+  - key: owner.is_entity
+    subject: property
+    volatility: slow
+    default_ttl_days: 180
+    description: Owner of record is an entity rather than a natural person.
+    value_schema:
+      type: boolean
+
+  - key: owner.deceased_probable
+    subject: property
+    volatility: slow
+    default_ttl_days: 180
+    # Contacting the estate of a living person, or vice versa, is the kind of error that
+    # should never be resolved by a hierarchy rule.
+    conflict_escalate: true
+    description: Probate or estate indicator present.
+    value_schema:
+      type: boolean
+
+  # ── Distress (volatile, 30d) ──────────────────────────────────────────────────────────
+  - key: vacancy.vbn_open
+    subject: property
+    volatility: volatile
+    default_ttl_days: 30
+    description: An open Vacant Building Notice exists.
+    value_schema:
+      type: boolean
+
+  - key: vacancy.vbn_opened_at
+    subject: property
+    volatility: volatile
+    default_ttl_days: 30
+    description: When the open VBN was issued; strength input is days open.
+    value_schema:
+      type: string
+      format: date
+
+  - key: tax.on_sale_list
+    subject: property
+    volatility: volatile
+    default_ttl_days: 30
+    description: Property appears on the current tax lien sale list.
+    value_schema:
+      type: boolean
+
+  - key: tax.delinquent_balance_cents
+    subject: property
+    volatility: volatile
+    default_ttl_days: 30
+    tolerance: 0
+    description: Delinquent tax balance in integer cents.
+    value_schema:
+      type: integer
+      minimum: 0
+
+  - key: code.violation_open_count
+    subject: property
+    volatility: volatile
+    default_ttl_days: 30
+    description: Count of open code enforcement citations.
+    value_schema:
+      type: integer
+      minimum: 0
+
+  - key: code.receivership
+    subject: property
+    volatility: volatile
+    default_ttl_days: 30
+    description: A receivership petition exists.
+    value_schema:
+      type: boolean
+
+  - key: foreclosure.filed
+    subject: property
+    volatility: volatile
+    default_ttl_days: 30
+    # Spec §2.3 / §4.4: this forces contact_block_reason = 'phifa_review' and routes any open
+    # next action to human_review. Getting it wrong in either direction has legal consequence
+    # under PHIFA, so a cross-source disagreement never auto-resolves.
+    conflict_escalate: true
+    description: A foreclosure docket entry exists for this property.
+    value_schema:
+      type: boolean
+
+  # ── Conversation-derived (spec §10.3) ─────────────────────────────────────────────────
+  - key: seller.stated_price
+    subject: property
+    volatility: volatile
+    default_ttl_days: 30
+    # §10.3: "A seller-stated price becomes a fact about WHAT THE SELLER SAID, not a fact
+    # about the property's value." The predicate name carries that distinction.
+    description: Price the seller stated on a call, in integer cents.
+    value_schema:
+      type: integer
+      minimum: 0

@@ -7,8 +7,14 @@
     ".": "./src/index.ts"
   },
   "dependencies": {
+    "@magnolia/config": "workspace:*",
+    "@magnolia/db": "workspace:*",
     "ajv": "^8.20.0",
     "ajv-formats": "^3.0.1",
+    "drizzle-orm": "^0.45.2",
     "uuid": "^14.0.1"
+  },
+  "devDependencies": {
+    "@magnolia/testkit": "workspace:*"
   }
 }

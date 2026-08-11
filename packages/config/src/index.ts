@@ -15,3 +15,19 @@ export {
   ScoringConfigSchema,
   type ScoringConfig,
 } from './scoring.js';
+
+export {
+  FeatureFlagsConfigSchema,
+  loadYamlConfig,
+  MarketConfigSchema,
+  parseYamlConfig,
+  PredicatesConfigSchema,
+  SourcesConfigSchema,
+  SpendCapsConfigSchema,
+  type FeatureFlagsConfig,
+  type MarketConfig,
+  type PredicateDefinition,
+  type PredicatesConfig,
+  type SourcesConfig,
+  type SpendCapsConfig,
+} from './seed-config.js';

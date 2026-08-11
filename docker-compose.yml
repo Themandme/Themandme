@@ -14,7 +14,11 @@ services:
       # `pnpm db:reset` drops the volume so these re-run.
       - ./docker/postgres/init:/docker-entrypoint-initdb.d:ro
     healthcheck:
-      test: ['CMD-SHELL', 'pg_isready -U magnolia -d magnolia']
+      # -h 127.0.0.1 matters: during first-time init the entrypoint runs a temporary server on
+      # the Unix socket only, so a socket-based pg_isready reports healthy while the scripts in
+      # docker-entrypoint-initdb.d are still running. Checking TCP means "healthy" is only
+      # reported once the real listener is up and the extensions exist.
+      test: ['CMD-SHELL', 'pg_isready -h 127.0.0.1 -U magnolia -d magnolia']
       interval: 5s
       timeout: 5s
       retries: 10

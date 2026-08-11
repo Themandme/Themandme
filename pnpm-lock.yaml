@@ -77,24 +77,43 @@ importers:
 
   packages/core:
     dependencies:
+      '@magnolia/config':
+        specifier: workspace:*
+        version: link:../config
+      '@magnolia/db':
+        specifier: workspace:*
+        version: link:../db
       ajv:
         specifier: ^8.20.0
         version: 8.20.0
       ajv-formats:
         specifier: ^3.0.1
         version: 3.0.1(ajv@8.20.0)
+      drizzle-orm:
+        specifier: ^0.45.2
+        version: 0.45.2(postgres@3.4.9)
       uuid:
         specifier: ^14.0.1
         version: 14.0.1
+    devDependencies:
+      '@magnolia/testkit':
+        specifier: workspace:*
+        version: link:../testkit
 
   packages/db:
     dependencies:
+      '@magnolia/config':
+        specifier: workspace:*
+        version: link:../config
       drizzle-orm:
         specifier: ^0.45.2
         version: 0.45.2(postgres@3.4.9)
       postgres:
         specifier: ^3.4.9
         version: 3.4.9
+      uuid:
+        specifier: ^14.0.1
+        version: 14.0.1
     devDependencies:
       drizzle-kit:
         specifier: ^0.31.10
@@ -102,7 +121,17 @@ importers:
 
   packages/providers: {}
 
-  packages/testkit: {}
+  packages/testkit:
+    dependencies:
+      '@magnolia/db':
+        specifier: workspace:*
+        version: link:../db
+      drizzle-orm:
+        specifier: ^0.45.2
+        version: 0.45.2(postgres@3.4.9)
+      postgres:
+        specifier: ^3.4.9
+        version: 3.4.9
 
 packages:
 

@@ -1,8 +1,7 @@
 /**
- * @magnolia/testkit — Fixtures, factories, fake providers, golden files.
+ * @magnolia/testkit — fixtures, factories, fake providers, golden files.
  *
- * Populated by BUILD_PLAN M1 onward. M0 establishes the package boundary and its build,
- * lint and type rails only; no domain logic lives here yet.
+ * Fakes for the provider interfaces arrive with the interfaces themselves (M2 onward).
  */
 
-export const PACKAGE_NAME = '@magnolia/testkit';
+export { createTestDb, type TestDb } from './db.js';

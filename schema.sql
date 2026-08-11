@@ -360,6 +360,12 @@ CREATE TABLE facts (
   is_current        boolean NOT NULL DEFAULT true
 );
 CREATE INDEX facts_subject ON facts (subject_type, subject_id, predicate) WHERE is_current;
+-- At most one CURRENT fact per subject+predicate+source. Superseding (§8.1 rule 5) already
+-- intends this; the index makes it structural rather than a matter of application discipline,
+-- so a bug in recordFact or a concurrent write cannot produce two "current" facts from one
+-- source. Conflicts (§8.3) are between DIFFERENT sources, so this does not suppress them.
+CREATE UNIQUE INDEX facts_one_current_per_source
+  ON facts (subject_type, subject_id, predicate, source_id) WHERE is_current;
 CREATE INDEX facts_predicate_observed ON facts (predicate, observed_at DESC);
 CREATE INDEX facts_expiring ON facts (expires_at) WHERE is_current AND expires_at IS NOT NULL;
 

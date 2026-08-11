@@ -1,0 +1,178 @@
+# Baltimore V1 data sources. Spec §4.5.
+#
+# EVERY endpoint below is [VERIFY]: confirm the URL, the schema, the update cadence, and the
+# terms of use before the adapter that depends on it goes live. Endpoints move. These rows
+# exist so adapters have something to reference and so provenance is recordable; they are not
+# a claim that any URL here is currently correct.
+#
+# `enabled: false` on every external source. Adapters are built in M2 and each is turned on
+# only after its endpoint has been verified against §4.5.
+
+sources:
+  # ── Baltimore City open data ──────────────────────────────────────────────────────────
+  - key: baltimore.vbn
+    display_name: Vacant Building Notices
+    tier: official_record
+    access_method: arcgis_rest
+    base_url: https://egisdata.baltimorecity.gov/egis/rest/services
+    scraping_allowed: true
+    refresh_cron: '0 6 * * *' # daily
+    base_confidence: 0.95
+    enabled: false
+
+  - key: baltimore.tax_sale
+    display_name: Tax Lien Certificate Sale Properties
+    tier: official_record
+    access_method: socrata
+    base_url: https://data.baltimorecity.gov
+    scraping_allowed: true
+    refresh_cron: '0 7 * * 1' # weekly in season, else monthly
+    base_confidence: 0.95
+    enabled: false
+
+  - key: baltimore.code_violations
+    display_name: Code enforcement / housing citations
+    tier: official_record
+    access_method: socrata
+    base_url: https://data.baltimorecity.gov
+    scraping_allowed: true
+    refresh_cron: '0 6 * * *'
+    base_confidence: 0.9
+    enabled: false
+
+  - key: baltimore.311
+    display_name: 311 service requests (occupancy proxies)
+    tier: secondary
+    access_method: socrata
+    base_url: https://data.baltimorecity.gov
+    scraping_allowed: true
+    refresh_cron: '0 6 * * *'
+    # A 311 report is a citizen assertion, not a finding of fact. Weighted accordingly.
+    base_confidence: 0.6
+    enabled: false
+
+  - key: baltimore.permits
+    display_name: Building permits
+    tier: official_record
+    access_method: socrata
+    base_url: https://data.baltimorecity.gov
+    scraping_allowed: true
+    refresh_cron: '0 6 * * *'
+    base_confidence: 0.9
+    enabled: false
+
+  - key: baltimore.open_bid
+    display_name: Open Bid List / Vacants to Value
+    tier: official_record
+    access_method: socrata
+    base_url: https://data.baltimorecity.gov
+    scraping_allowed: true
+    refresh_cron: '0 8 * * 1'
+    base_confidence: 0.9
+    enabled: false
+
+  - key: baltimore.real_property
+    display_name: City real property / assessments extract
+    tier: official_record
+    access_method: socrata
+    base_url: https://data.baltimorecity.gov
+    scraping_allowed: true
+    refresh_cron: '0 9 1 * *' # monthly
+    base_confidence: 0.95
+    enabled: false
+
+  # ── Maryland statewide ────────────────────────────────────────────────────────────────
+  - key: md.sdat_parcel_points
+    display_name: SDAT parcel points (ownership, valuation, structure)
+    tier: official_record
+    access_method: arcgis_rest
+    base_url: https://geodata.md.gov/imap/rest/services/PlanningCadastre
+    scraping_allowed: true
+    refresh_cron: '0 9 2 * *' # monthly, SDAT-sourced
+    base_confidence: 0.95
+    enabled: false
+
+  - key: md.parcel_boundaries
+    display_name: Statewide parcel polygons
+    tier: official_record
+    access_method: arcgis_rest
+    base_url: https://geodata.md.gov/imap/rest/services/PlanningCadastre
+    scraping_allowed: true
+    refresh_cron: '0 9 3 1,4,7,10 *' # quarterly
+    base_confidence: 0.95
+    enabled: false
+
+  - key: md.sdat_entities
+    display_name: SDAT business entity search (LLC -> officers/agent)
+    tier: official_record
+    access_method: manual_upload
+    base_url: https://egov.maryland.gov/businessexpress
+    # [VERIFY] Terms not confirmed. On-demand operator lookup until they are.
+    scraping_allowed: false
+    refresh_cron: null
+    base_confidence: 0.9
+    enabled: false
+
+  # ── ToS-restricted. Spec §4.5 MUST. ───────────────────────────────────────────────────
+  # These two are deliberately manual_upload with scraping_allowed: false.
+  #
+  # "Manual operator lookup with recorded provenance beats an automated ToS violation."
+  # Do not flip either of these without the written terms review in spec §17 item 6.
+  - key: md.land_records
+    display_name: Land records — deeds, mortgages, liens (mdlandrec.net)
+    tier: official_record
+    access_method: manual_upload
+    base_url: https://mdlandrec.net
+    scraping_allowed: false
+    license_note: >-
+      Credentialed access, terms-restricted. [VERIFY] Until the terms are reviewed in writing,
+      access is manual operator lookup only, recorded as a human-tier fact.
+    refresh_cron: null
+    base_confidence: 0.95
+    enabled: false
+
+  - key: md.case_search
+    display_name: Maryland Judiciary Case Search (foreclosure dockets)
+    tier: official_record
+    access_method: manual_upload
+    base_url: https://casesearch.courts.state.md.us
+    scraping_allowed: false
+    license_note: >-
+      Terms restrict automated/bulk extraction. [VERIFY] MUST remain scraping_allowed=false and
+      manual-lookup-only until the current terms are verified in writing. Spec §4.5.
+    refresh_cron: null
+    base_confidence: 0.95
+    enabled: false
+
+  # ── Internal producers ────────────────────────────────────────────────────────────────
+  # facts.source_id is NOT NULL (see packages/db/DIVERGENCES.md), so Magnolia's own facts need
+  # a source row to point at. These three cover the non-external tiers of the source_tier enum.
+  - key: magnolia.derived
+    display_name: Magnolia — derived from other facts
+    tier: derived
+    access_method: internal
+    scraping_allowed: false
+    refresh_cron: null
+    base_confidence: 0.8
+    enabled: true
+
+  - key: magnolia.ai_inference
+    display_name: Magnolia — LLM inference
+    tier: ai_inference
+    access_method: internal
+    scraping_allowed: false
+    refresh_cron: null
+    # Spec §4.2: an ai_inference fact MUST NOT by itself justify spending over $1.00, sending
+    # an outbound communication, or advancing a transaction state.
+    base_confidence: 0.5
+    enabled: true
+
+  - key: magnolia.human
+    display_name: Magnolia — operator entry
+    tier: human
+    access_method: internal
+    scraping_allowed: false
+    refresh_cron: null
+    # §4.2: human overrides everything, recorded with the operator's id.
+    base_confidence: 1.0
+    enabled: true

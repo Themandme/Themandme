@@ -800,6 +800,7 @@ CREATE INDEX "property_person_roles_property_id_idx" ON "property_person_roles" 
 CREATE INDEX "property_person_roles_person_id_idx" ON "property_person_roles" USING btree ("person_id") WHERE "property_person_roles"."is_current";--> statement-breakpoint
 CREATE INDEX "fact_conflicts_resolved_at_idx" ON "fact_conflicts" USING btree ("resolved_at") WHERE "fact_conflicts"."resolved_at" is null;--> statement-breakpoint
 CREATE INDEX "facts_subject" ON "facts" USING btree ("subject_type","subject_id","predicate") WHERE "facts"."is_current";--> statement-breakpoint
+CREATE UNIQUE INDEX "facts_one_current_per_source" ON "facts" USING btree ("subject_type","subject_id","predicate","source_id") WHERE "facts"."is_current";--> statement-breakpoint
 CREATE INDEX "facts_predicate_observed" ON "facts" USING btree ("predicate","observed_at" DESC NULLS FIRST);--> statement-breakpoint
 CREATE INDEX "facts_expiring" ON "facts" USING btree ("expires_at") WHERE "facts"."is_current" and "facts"."expires_at" is not null;--> statement-breakpoint
 CREATE UNIQUE INDEX "next_actions_one_open" ON "next_actions" USING btree ("opportunity_id") WHERE "next_actions"."is_open";--> statement-breakpoint

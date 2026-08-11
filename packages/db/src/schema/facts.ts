@@ -1,5 +1,15 @@
 import { sql } from 'drizzle-orm';
-import { boolean, check, index, integer, jsonb, pgTable, text, uuid } from 'drizzle-orm/pg-core';
+import {
+  boolean,
+  check,
+  index,
+  integer,
+  jsonb,
+  pgTable,
+  text,
+  uniqueIndex,
+  uuid,
+} from 'drizzle-orm/pg-core';
 import type { AnyPgColumn } from 'drizzle-orm/pg-core';
 import { probability, ts } from './column-types.js';
 import { epistemicKind, subjectKind } from './enums.js';
@@ -70,6 +80,17 @@ export const facts = pgTable(
     check('facts_confidence_check', sql`${table.confidence} >= 0 AND ${table.confidence} <= 1`),
     index('facts_subject')
       .on(table.subjectType, table.subjectId, table.predicate)
+      .where(sql`${table.isCurrent}`),
+    /* At most one CURRENT fact per subject+predicate+source. Spec §4.1 rule 5 already intends
+       this — superseding flips `is_current` on the old row — but nothing enforced it, leaving
+       the invariant to application discipline. With the index, `recordFact` is correct by
+       construction: a bug, a concurrent write, or a caller bypassing supersede fails loudly
+       instead of silently producing two "current" facts from one source.
+
+       This does not suppress conflict detection: rule 6 conflicts are disagreements between
+       DIFFERENT sources, which this index leaves untouched. */
+    uniqueIndex('facts_one_current_per_source')
+      .on(table.subjectType, table.subjectId, table.predicate, table.sourceId)
       .where(sql`${table.isCurrent}`),
     index('facts_predicate_observed').on(table.predicate, table.observedAt.desc().nullsFirst()),
     index('facts_expiring')
