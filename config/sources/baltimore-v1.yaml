@@ -1,9 +1,15 @@
 # Baltimore V1 data sources. Spec §4.5.
 #
-# EVERY endpoint below is [VERIFY]: confirm the URL, the schema, the update cadence, and the
-# terms of use before the adapter that depends on it goes live. Endpoints move. These rows
-# exist so adapters have something to reference and so provenance is recordable; they are not
-# a claim that any URL here is currently correct.
+# Partially verified 2026-08-11 — see docs/SOURCE_VERIFICATION.md for the evidence behind each
+# `license_note`. Rows marked VERIFIED were confirmed against the live service on that date;
+# rows marked NOT VERIFIED are still placeholders and no adapter should be written against them
+# until they are checked.
+#
+# Verification confirms an endpoint WORKS. It says nothing about whether we are permitted to
+# call it — terms of use remain open (spec §17.6) and are counsel's call, not this file's.
+#
+# Endpoints move and datasets go quiet without announcement (layer 11 on the DHCD service has
+# published nothing since 2020 while still being listed). Re-verify before going live.
 #
 # `enabled: false` on every external source. Adapters are built in M2 and each is turned on
 # only after its endpoint has been verified against §4.5.
@@ -14,9 +20,13 @@ sources:
     display_name: Vacant Building Notices
     tier: official_record
     access_method: arcgis_rest
-    base_url: https://egisdata.baltimorecity.gov/egis/rest/services
+    base_url: https://egisdata.baltimorecity.gov/egis/rest/services/Housing/DHCD_Open_Baltimore_Datasets/FeatureServer/1
     scraping_allowed: true
     refresh_cron: '0 6 * * *' # daily
+    license_note: >-
+      VERIFIED 2026-08-11: 387 notices since 2026-06-01. Fields NoticeNum/DateNotice/
+      DateCancel/DateAbate/BLOCKLOT/Address. maxRecordCount 1000, pagination supported.
+      See docs/SOURCE_VERIFICATION.md.
     base_confidence: 0.95
     enabled: false
 
@@ -27,6 +37,9 @@ sources:
     base_url: https://data.baltimorecity.gov
     scraping_allowed: true
     refresh_cron: '0 7 * * 1' # weekly in season, else monthly
+    license_note: >-
+      NOT VERIFIED as of 2026-08-11 — endpoint not located this pass. Feeds tax.on_sale_list
+      (signal weight 0.22) and tax.delinquent_balance_cents. Highest-priority gap.
     base_confidence: 0.95
     enabled: false
 
@@ -37,6 +50,9 @@ sources:
     base_url: https://data.baltimorecity.gov
     scraping_allowed: true
     refresh_cron: '0 6 * * *'
+    license_note: >-
+      NOT VERIFIED as of 2026-08-11 — endpoint not located this pass. Feeds
+      code.violation_open_count.
     base_confidence: 0.9
     enabled: false
 
@@ -48,36 +64,63 @@ sources:
     scraping_allowed: true
     refresh_cron: '0 6 * * *'
     # A 311 report is a citizen assertion, not a finding of fact. Weighted accordingly.
+    license_note: >-
+      NOT VERIFIED as of 2026-08-11. Open Baltimore partitions 311 by CALENDAR YEAR (separate
+      2019..2026 datasets), which an adapter must handle and roll over annually. A consolidated
+      2021-present layer appeared in search results but returned 404.
     base_confidence: 0.6
     enabled: false
 
   - key: baltimore.permits
     display_name: Building permits
     tier: official_record
-    access_method: socrata
-    base_url: https://data.baltimorecity.gov
+    access_method: arcgis_rest
+    base_url: https://egisdata.baltimorecity.gov/egis/rest/services/Housing/DHCD_Open_Baltimore_Datasets/FeatureServer/3
     scraping_allowed: true
     refresh_cron: '0 6 * * *'
+    license_note: >-
+      VERIFIED 2026-08-11: 3,641 permits issued since 2026-07-01. Date fields IssuedDate,
+      ExpirationDate. Layer on the shared DHCD FeatureServer, not a separate Socrata dataset.
+    base_confidence: 0.9
+    enabled: false
+
+  # Fills a gap: spec §4.4 defines the code.receivership signal but §4.5 names no source
+  # that supplies it. Layers 4 (filed/open) and 5 (settled) do.
+  - key: baltimore.receivership
+    display_name: Receivership petitions - filed and open
+    tier: official_record
+    access_method: arcgis_rest
+    base_url: https://egisdata.baltimorecity.gov/egis/rest/services/Housing/DHCD_Open_Baltimore_Datasets/FeatureServer/4
+    scraping_allowed: true
+    refresh_cron: '0 7 * * *'
+    license_note: >-
+      Structure confirmed 2026-08-11 (DateFiled, ReceiverAppointed, DateAuction,
+      SoldAtAuction); recency NOT yet measured. Feeds the code.receivership signal.
     base_confidence: 0.9
     enabled: false
 
   - key: baltimore.open_bid
     display_name: Open Bid List / Vacants to Value
     tier: official_record
-    access_method: socrata
-    base_url: https://data.baltimorecity.gov
+    access_method: arcgis_rest
+    base_url: https://egisdata.baltimorecity.gov/egis/rest/services/Housing/DHCD_Open_Baltimore_Datasets/FeatureServer/7
     scraping_allowed: true
     refresh_cron: '0 8 * * 1'
+    license_note: >-
+      Structure confirmed 2026-08-11 (layer 7, no date fields). Recency NOT measured —
+      needs a probe that does not rely on a date column.
     base_confidence: 0.9
     enabled: false
 
   - key: baltimore.real_property
     display_name: City real property / assessments extract
     tier: official_record
-    access_method: socrata
-    base_url: https://data.baltimorecity.gov
+    access_method: arcgis_rest
+    base_url: https://egisdata.baltimorecity.gov/egis/rest/services/Housing/DHCD_Open_Baltimore_Datasets/FeatureServer/12
     scraping_allowed: true
     refresh_cron: '0 9 1 * *' # monthly
+    license_note: >-
+      Structure confirmed 2026-08-11 (layer 12, no date fields). Recency NOT measured.
     base_confidence: 0.95
     enabled: false
 
@@ -86,9 +129,15 @@ sources:
     display_name: SDAT parcel points (ownership, valuation, structure)
     tier: official_record
     access_method: arcgis_rest
-    base_url: https://geodata.md.gov/imap/rest/services/PlanningCadastre
+    base_url: https://mdgeodata.md.gov/imap/rest/services/PlanningCadastre/MD_PropertyData/MapServer/0
     scraping_allowed: true
     refresh_cron: '0 9 2 * *' # monthly, SDAT-sourced
+    license_note: >-
+      VERIFIED 2026-08-11. MapServer, NOT FeatureServer. Host is mdgeodata.md.gov —
+      geodata.md.gov returned HTTP 503. Live maxRecordCount is 2000 (the data.gov catalogue
+      advertises 65000). State recommends bulk download via
+      .../MapServer/exts/MDiMapDataDownload/customLayers/0. Fields ACCTID/YEARBLT/SQFTSTRC/
+      TRADATE/CONSIDR1/NFMTTLVL/DESCLU/OWNADD1..OWNERZIP.
     base_confidence: 0.95
     enabled: false
 
@@ -99,6 +148,9 @@ sources:
     base_url: https://geodata.md.gov/imap/rest/services/PlanningCadastre
     scraping_allowed: true
     refresh_cron: '0 9 3 1,4,7,10 *' # quarterly
+    license_note: >-
+      NOT VERIFIED as of 2026-08-11. Note the sibling md.sdat_parcel_points host correction —
+      geodata.md.gov returned 503; mdgeodata.md.gov responded.
     base_confidence: 0.95
     enabled: false
 
