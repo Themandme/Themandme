@@ -74,6 +74,64 @@ days-open strength; `DateCancel`/`DateAbate` are exactly the close conditions in
 | `land.use_code`                             | `DESCLU`                                                           |
 | `owner.mailing_address`                     | `OWNADD1`, `OWNADD2`, `OWNCITY`, `OWNSTATE`, `OWNERZIP`, `OWNZIP2` |
 
+#### Three findings from running the signal registry over the loaded market — 2026-08-12
+
+Endpoint verification tells you a source answers. Only evaluating signals against the loaded
+data tells you what it can actually support. `pnpm signals:census` over all 217,463 properties
+produced three findings that field-list inspection had missed.
+
+**1. `OWNADD1` zero-pads the house number. The parcel's own address does not.**
+
+`0002 S COLLINGTON AVE` in the owner block, `2 S COLLINGTON AVE` as the property. 8,242 of
+217,058 owner mailing addresses are padded; **zero** property addresses are — the property side
+is assembled from `STRTNUM`/`STRTNAM` components, the owner side is a free-text field.
+
+Measured consequence: **8,060 properties flagged `owner.absentee`** — 8.1% of all absentee
+flags — where the owner lives in the building. Absentee drives outreach, so those are letters
+sent on a false premise.
+
+Fixed in `normalizeAddress`, not in the adapter, because `address_hash` is the tier-1
+entity-resolution key (§4.3): a padded address is a _second property row for a house that
+already exists_ the moment any source emits one. No source does today; the manual-upload CSV
+path makes it a matter of time.
+
+**2. There is no owner-name field on this layer, so `owner.entity` has no source.**
+
+The layer carries 114 fields. Every owner field is an _address_ field — `OWNADD1`, `OWNADD2`,
+`OWNCITY`, `OWNSTATE`, `OWNERZIP`, `OWNZIP2`. There is no `OWNNAME`.
+
+So `owner.is_entity` cannot be derived here at all, and the `owner.entity` signal (weight 0.05,
+§6.2) is dark until `md.sdat_entities` lands. This is a **source limitation, not an adapter
+omission** — worth stating plainly, because "the adapter forgot a field" and "the field does not
+exist" call for completely different work.
+
+**3. `land.vacant_lot` is derivable, but not from any single field.**
+
+`DESCLU` has exactly ten values across all 217,463 records — `Residential` (187,751), `Exempt`,
+`Commercial`, … — and **none of them is a vacant-land category**. There is no "lot set" to match
+against, so §4.4's rule cannot be applied as written.
+
+Structure _absence_ works instead, but only as a conjunction. Each indicator alone is wrong:
+
+| Query (`JURSCODE='BACI'`, 237,260 total)                                     | Count      |
+| ---------------------------------------------------------------------------- | ---------- |
+| `NFMIMPVL>0 AND (SQFTSTRC=0 OR SQFTSTRC IS NULL)`                            | 44,064     |
+| `NFMIMPVL IS NOT NULL AND (YEARBLT IS NULL OR YEARBLT='0' OR ='')`           | 18,374     |
+| `NFMIMPVL IS NULL AND (YEARBLT IS NULL OR ='0' OR ='') AND SQFTSTRC IS NULL` | **21,528** |
+
+44,064 parcels have an appraised improvement value but no recorded structure sqft — so
+`SQFTSTRC` absence means "SDAT did not record it", **not** "there is no building". Same for
+`YEARBLT`. Only the three-way absence holds up, and it lands at 21,528 (9.1%), which matches the
+~20,000 vacant lots Baltimore is independently known to carry. Contamination is small: 269 of
+them are condominiums (1.2%).
+
+`NFMIMPVL` is never `0` on this layer — it is `NULL` (21,687) or positive. A `= 0` test finds
+nothing, which is the kind of thing that reads as "no vacant lots in Baltimore".
+
+**Not yet implemented**: `NFMIMPVL` is not in `SDAT_FIELDS`, so applying this needs a field
+added and a full re-fetch. Until then the land engine — one of the spec's three — has zero
+input.
+
 ---
 
 ## Verified — dead

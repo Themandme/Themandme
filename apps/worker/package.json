@@ -25,6 +25,8 @@
     "start": "tsx --env-file-if-exists=../../.env src/main.ts",
     "dev": "tsx watch --env-file-if-exists=../../.env src/main.ts",
     "ingest:resume": "tsx --env-file-if-exists=../../.env src/resume.ts",
-    "reproject": "tsx --env-file-if-exists=../../.env src/reproject.ts"
+    "ingest:renormalize": "tsx --env-file-if-exists=../../.env src/renormalize.ts",
+    "reproject": "tsx --env-file-if-exists=../../.env src/reproject.ts",
+    "signals:census": "tsx --env-file-if-exists=../../.env src/signal-census.ts"
   }
 }

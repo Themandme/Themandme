@@ -41,16 +41,17 @@ pnpm env:check                # validates .env the same way the apps do at boot
 pnpm check                    # lint + typecheck + format + test
 ```
 
-| Script           | Does                                            |
-| ---------------- | ----------------------------------------------- |
-| `pnpm check`     | Everything CI runs                              |
-| `pnpm test`      | Vitest, once                                    |
-| `pnpm lint`      | ESLint, including the vendor-SDK boundary       |
-| `pnpm typecheck` | `tsc` across the whole workspace                |
-| `pnpm env:check` | Validate the environment without booting an app |
-| `pnpm db:up`     | Start Postgres and Redis                        |
-| `pnpm db:reset`  | Drop the volumes and re-run the init SQL        |
-| `pnpm db:psql`   | psql into the local database                    |
+| Script                | Does                                            |
+| --------------------- | ----------------------------------------------- |
+| `pnpm check`          | Everything CI runs                              |
+| `pnpm test`           | Vitest, once                                    |
+| `pnpm lint`           | ESLint, including the vendor-SDK boundary       |
+| `pnpm typecheck`      | `tsc` across the whole workspace                |
+| `pnpm env:check`      | Validate the environment without booting an app |
+| `pnpm db:up`          | Start Postgres and Redis                        |
+| `pnpm db:reset`       | Drop the volumes and re-run the init SQL        |
+| `pnpm db:psql`        | psql into the local database                    |
+| `pnpm signals:census` | Fire rates for every signal over loaded data    |
 
 ### Without Docker
 
@@ -147,6 +148,41 @@ that happened three times during the SDAT load here, and each time the committed
 and only the process died. The retry is safe because the pipeline is idempotent (invariant 7):
 an already-normalized record is not in the pending set. It stops if a pass makes no progress,
 since that is a failure retrying will not fix.
+
+### Re-deriving facts after a normalizer fix
+
+```bash
+pnpm ingest:renormalize md.sdat_parcel_points   # clears normalized_at
+pnpm ingest:resume      md.sdat_parcel_points   # re-derives, no re-fetch
+```
+
+`ingest:resume` finishes work that was never done. This handles the other case: work that _was_
+done, by a normalizer that has since been fixed. Those records are marked complete, so `resume`
+correctly skips them and the fix stays inert against everything already loaded.
+
+Only `normalized_at` is cleared. Raw records are untouched and **facts are never deleted** — the
+ledger is append-only, so a corrected value arrives by superseding the old one and the old fact
+stays readable for replay.
+
+### What the signals actually do
+
+```bash
+pnpm signals:census
+```
+
+Evaluates the whole signal registry over every loaded property and reports fire rate, mean and
+median strength per signal, plus the fact count behind each predicate. Read-only.
+
+The unit tests prove each rule is _correct_. They cannot tell you whether it is _useful_, and
+those are different failures with the same symptom. A signal firing on 90% of the market
+separates nothing; one firing on 0% is either a wrong rule or — far more often here — a dead
+source. **Those two look identical from a fire rate alone**, which is why the census prints
+predicate coverage beside it: a signal reading a predicate with zero facts is untested by this
+data, not disproven by it. Reading `vacancy.vbn_open: 0.00%` and concluding Baltimore has no
+vacant buildings would be exactly backwards.
+
+Run it after each new source lands; the diff in fire rates is what that source bought. It is
+also how the leading-zero house-number bug below was found.
 
 ### Repairing the read model
 

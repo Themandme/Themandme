@@ -124,6 +124,28 @@ const VULGAR_FRACTIONS: Record<string, string> = {
 const HOUSE_NUMBER = /^\d+[A-Z]?$/;
 const FRACTION = /^\d+\/\d+$/;
 
+/**
+ * Drop zero padding from a house number: `0002` → `2`, `007A` → `7A`.
+ *
+ * SDAT's free-text owner address block zero-pads the number while the parcel's own address
+ * components do not, so the same building arrives in two spellings from a single source. That is
+ * not a cosmetic difference: `address_hash` is the tier-1 entity-resolution key (§4.3), so a
+ * padded address is a second property row for a house that already exists, and `owner.absentee`
+ * compares the two strings directly — 8,060 Baltimore properties were flagged absentee on this
+ * alone, owners who live in the building.
+ *
+ * Padding carries no information. No addressing authority distinguishes 2 from 0002; the zeros
+ * are a fixed-width-field artifact.
+ *
+ * A number that is all zeros collapses to a single `0` rather than to nothing, because an empty
+ * house number would push the street name into the house-number slot and corrupt the parse
+ * instead of merely widening it.
+ */
+function stripHouseNumberPadding(token: string): string {
+  const stripped = token.replace(/^0+(?=\d)/, '');
+  return stripped === '' ? token : stripped;
+}
+
 function tokenize(raw: string): string[] {
   let text = raw.toUpperCase();
 
@@ -170,7 +192,7 @@ export function normalizeAddress(raw: string): NormalizedAddress {
   // House number, then an optional fraction immediately after it.
   const first = rest[0];
   if (first !== undefined && HOUSE_NUMBER.test(first)) {
-    result.houseNumber = first;
+    result.houseNumber = stripHouseNumberPadding(first);
     rest = rest.slice(1);
 
     const maybeFraction = rest[0];

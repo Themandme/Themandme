@@ -113,6 +113,60 @@ describe('Baltimore rowhouse half-numbers', () => {
   });
 });
 
+describe('zero-padded house numbers', () => {
+  /*
+   * Found by running the signal registry over the loaded Baltimore market, not by reading the
+   * spec. SDAT's `OWNADD1` free-text owner block zero-pads the house number ("0002 S COLLINGTON
+   * AVE") while the property address, built from the parcel's own components, does not ("2 S
+   * COLLINGTON AVE"). 8,242 of 217,058 owner mailing addresses in the ledger are padded and
+   * **zero** property addresses are.
+   *
+   * The consequence was measured: 8,060 properties were flagged `owner.absentee` — 8.1% of all
+   * absentee flags — where the owner in fact lives in the building. Absentee drives outreach, so
+   * that is 8,060 letters aimed at the wrong premise.
+   *
+   * The normalizer is the right place for this. `address_hash` is the tier-1 entity-resolution
+   * key (§4.3), so a padded number is not just a cosmetic difference — it is two property rows
+   * for one house the moment any source emits a padded address. No source does today; the
+   * manual-upload CSV path makes it a matter of time.
+   */
+  it('strips leading zeros so a padded number matches an unpadded one', () => {
+    expect(norm('0002 S Collington Ave')).toBe('2 S COLLINGTON AVE');
+    expect(norm('0017 S Chester St')).toBe('17 S CHESTER ST');
+    expect(norm('0002 S Collington Ave')).toBe(norm('2 S Collington Ave'));
+  });
+
+  it('strips them in the parsed house number too, not just the joined string', () => {
+    /* Tier-3 resolution pins `houseNumber` exactly, so leaving it padded there would keep the
+       bug alive on the path that decides whether two records are the same dwelling. */
+    expect(normalizeAddress('0104 S Collington Ave').houseNumber).toBe('104');
+  });
+
+  it('gives a padded and unpadded address the same hash', () => {
+    expect(addressHash(norm('0002 S Collington Ave'), '21231')).toEqual(
+      addressHash(norm('2 S Collington Ave'), '21231'),
+    );
+  });
+
+  it('keeps a letter suffix while stripping the padding', () => {
+    expect(norm('007A W Lanvale St')).toBe('7A W LANVALE ST');
+  });
+
+  it('does not turn a zero house number into an empty one', () => {
+    /* "0 …" is rare but real, and dropping the number entirely would shift the street name into
+       the house-number slot and corrupt the parse rather than merely widen it. */
+    expect(normalizeAddress('0 Pratt St').houseNumber).toBe('0');
+    expect(norm('0 Pratt St')).toBe('0 PRATT ST');
+    expect(normalizeAddress('000 Pratt St').houseNumber).toBe('0');
+  });
+
+  it('does not strip zeros from anything but the house number', () => {
+    /* A padded unit or a street named with a leading zero must survive — only the leading
+       position is a known SDAT padding artifact. */
+    expect(normalizeAddress('12 Main St Apt 007').unitNumber).toBe('007');
+  });
+});
+
 describe('house-number letter suffixes', () => {
   it('keeps a letter attached to the house number', () => {
     expect(norm('123A W Lanvale St')).toBe('123A W LANVALE ST');

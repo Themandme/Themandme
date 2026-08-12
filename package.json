@@ -31,7 +31,9 @@
     "stack:down": "docker compose --profile app down",
     "stack:logs": "docker compose --profile app logs -f api worker",
     "ingest:resume": "pnpm --filter @magnolia/worker ingest:resume",
-    "reproject": "pnpm --filter @magnolia/worker reproject"
+    "reproject": "pnpm --filter @magnolia/worker reproject",
+    "ingest:renormalize": "pnpm --filter @magnolia/worker ingest:renormalize",
+    "signals:census": "pnpm --filter @magnolia/worker signals:census"
   },
   "pnpm": {
     "onlyBuiltDependencies": [
