@@ -366,8 +366,50 @@ export async function normalizePending(
     }
   };
 
-  for (let offset = 0; offset < pending.length; offset += NORMALIZE_CHUNK_SIZE) {
-    const chunk = pending.slice(offset, offset + NORMALIZE_CHUNK_SIZE);
+  /*
+   * Recompute the read model for everything touched so far, then forget it.
+   *
+   * Called per chunk rather than once at the end. Projecting at the end is cheaper — a property
+   * touched by two chunks gets projected twice — but it is not crash-safe, and on a load running
+   * for tens of minutes that matters more. A process killed mid-run leaves every fact it wrote
+   * committed and the read model for those properties never recomputed: `facts` is right,
+   * `properties` is stale, and nothing says so.
+   *
+   * Not hypothetical. After the SDAT load, 217,463 properties had facts and only 83,355 had
+   * `read_model_at` set, because several runs were interrupted. `projectAll` is the documented
+   * repair (BUILD_PLAN M1.5), but needing a repair after every interruption is a worse default
+   * than projecting a few properties twice.
+   *
+   * Batching is what makes it affordable: two queries per 500 properties, so the duplicated work
+   * costs milliseconds.
+   */
+  const flushProjection = async (): Promise<void> => {
+    if (touched.size === 0) return;
+    const batch = [...touched];
+    touched.clear();
+    await projectProperties(db, registry, batch);
+  };
+
+  /*
+   * Records that already failed once are normalized ALONE, not in a chunk.
+   *
+   * A validation failure leaves `normalized_at` null, so the record stays pending and is retried
+   * on every subsequent run — and in a chunked path it rolls back its 499 blameless neighbours
+   * each time. Measured on the SDAT load: 152 bad records out of 196,257 were enough to fail
+   * roughly two chunks in five, and the batched path came out SLOWER than the sequential one it
+   * replaced.
+   *
+   * They still get retried, because the failure may be a normalizer bug that a deploy fixed.
+   * They just no longer make the healthy records pay for it.
+   */
+  const suspect = pending.filter((record) => record.normalizeError !== null);
+  const healthy = pending.filter((record) => record.normalizeError === null);
+
+  for (const record of suspect) await normalizeOne(record);
+  await flushProjection();
+
+  for (let offset = 0; offset < healthy.length; offset += NORMALIZE_CHUNK_SIZE) {
+    const chunk = healthy.slice(offset, offset + NORMALIZE_CHUNK_SIZE);
 
     /* Snapshot the counters. A failed chunk rolls back in the database but not in these, and
        the increments it made describe work that no longer exists — so they are rewound to
@@ -376,24 +418,18 @@ export async function normalizePending(
     const matchedBefore = propertiesMatched;
     const factsBefore = factsWritten;
 
-    if (await normalizeChunk(chunk)) continue;
+    if (!(await normalizeChunk(chunk))) {
+      propertiesCreated = createdBefore;
+      propertiesMatched = matchedBefore;
+      factsWritten = factsBefore;
 
-    propertiesCreated = createdBefore;
-    propertiesMatched = matchedBefore;
-    factsWritten = factsBefore;
+      /* Redo one record at a time: the survivors land, and the offender is recorded against its
+         own id rather than taking its 499 neighbours down with it. */
+      for (const record of chunk) await normalizeOne(record);
+    }
 
-    /* Redo one record at a time: the survivors land, and the offender is recorded against its
-       own id rather than taking its 499 neighbours down with it. */
-    for (const record of chunk) await normalizeOne(record);
+    await flushProjection();
   }
-
-  /* Project once per property rather than per fact — the read model is a pure function of
-     current facts, so intermediate projections would be wasted work.
-
-     Batched: the per-property path costs one query per projectable column plus an UPDATE, so a
-     VBN load spent ~138,000 round trips here and most of its wall clock. `projectProperties`
-     does two queries per 500 properties instead. */
-  await projectProperties(db, registry, [...touched]);
 
   return { normalized, factsWritten, propertiesCreated, propertiesMatched, errors, chunkFallbacks };
 }

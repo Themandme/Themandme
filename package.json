@@ -30,7 +30,8 @@
     "stack:up": "docker compose --profile app up -d --build",
     "stack:down": "docker compose --profile app down",
     "stack:logs": "docker compose --profile app logs -f api worker",
-    "ingest:resume": "pnpm --filter @magnolia/worker ingest:resume"
+    "ingest:resume": "pnpm --filter @magnolia/worker ingest:resume",
+    "reproject": "pnpm --filter @magnolia/worker reproject"
   },
   "pnpm": {
     "onlyBuiltDependencies": [

@@ -148,6 +148,19 @@ and only the process died. The retry is safe because the pipeline is idempotent 
 an already-normalized record is not in the pending set. It stops if a pass makes no progress,
 since that is a failure retrying will not fix.
 
+### Repairing the read model
+
+```bash
+pnpm reproject
+```
+
+Recomputes `properties` scalar columns from current facts for every property — BUILD_PLAN M1.5's
+repair path, made runnable. Always safe and always idempotent, because the read model is a pure
+function of current facts.
+
+Needed less often now that `normalizePending` projects per chunk rather than once at the end, but
+still the right tool when a projection is suspected wrong. **217,463 properties in 43 seconds.**
+
 ### Measured throughput
 
 A full live `baltimore.vbn` load, 2026-08-12:
