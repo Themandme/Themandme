@@ -40,6 +40,11 @@ export const MarketConfigSchema = z.object({
     max_touches_per_person_per_day: z.number().int().positive(),
     max_signal_age_days: z.number().int().positive(),
     max_spend_per_opportunity_cents: z.number().int().positive(),
+    /* §4.3 tier 3. See the measurement note in config/markets/baltimore.yaml. The threshold is a
+       candidate RECALL floor, not a match decision — matching is structural (house number,
+       fraction and unit exact; directional and suffix compatible) plus centroid confirmation. */
+    fuzzy_address_threshold: probability,
+    centroid_confirm_metres: z.number().positive(),
     calling_window_start_hour: z.number().int().min(0).max(23),
     calling_window_end_hour: z.number().int().min(0).max(23),
     /* [VERIFY] spec §2.5 — null until counsel answers. Null is the honest value; a guessed

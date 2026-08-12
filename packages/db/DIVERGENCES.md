@@ -131,6 +131,88 @@ drift fails a test instead of silently writing garbage facts.
 
 ---
 
+### Tier-3 entity resolution does not use similarity as the match decision
+
+Spec §4.3 defines tier 3 as trigram similarity `>= 0.92` on the address plus a confirming
+attribute (a parcel centroid within 50 m, or a matching owner name), with the score as the thing
+that decides and the centroid as a secondary check.
+
+Implemented instead: **the match decision is structural, and the score is demoted to a candidate
+recall prefilter.** `packages/core/src/resolution/resolve-property.ts`.
+
+#### Why — measured, not assumed
+
+Every number below was measured on 2026-08-11: distances from live SDAT parcel points on
+Guilford Ave, scores from `pg_trgm` `similarity()` in Postgres 16.
+
+**Neither mechanism can separate house numbers.**
+
+| Pair                             | Distance  |
+| -------------------------------- | --------- |
+| 2832 → 2834 (adjacent rowhouses) | **4.4 m** |
+| 2834 → 2836                      | 5.2 m     |
+| Across the street                | ~70 m     |
+| Ends of a 12-parcel block        | ~60 m     |
+
+A 50 m radius spans about ten neighbouring houses, so it cannot distinguish 2832 from 2834.
+Those same neighbours score **0.800** on the full address — just under the spec's threshold, in
+the region where the radius has just been shown to be useless. The two checks fail on the _same_
+pair, so neither backstops the other, and any downward tuning of the threshold merges neighbours.
+
+**Similarity cannot separate street names either.** The two distributions overlap completely:
+
+| Must MATCH                     |           | Must REJECT             |           |
+| ------------------------------ | --------- | ----------------------- | --------- |
+| `GUILFORD` / `GUILFORDD`       | 0.727     | `LOMBARD` / `LOMBARDY`  | **0.700** |
+| `PENNSYLVANIA` / `PENNSYLVANA` | 0.667     | `LIGHT` / `LIGHTS`      | 0.625     |
+| `GUILFORD` / `GUILFRD` (typo)  | **0.545** | `FAYETTE` / `LAFAYETTE` | 0.500     |
+| `BALTIMORE` / `BALTIMOR`       | 0.727     | `PARK` / `PARKWAY`      | 0.444     |
+| `SAINT PAUL` / `ST PAUL`       | **0.462** | `CALVERT` / `CALHOUN`   | 0.231     |
+
+There is no threshold that admits the typo at 0.545 while rejecting `LOMBARD`/`LOMBARDY` at
+0.700. Worse, **`N CHARLES ST` vs `S CHARLES ST` scores 0.786** — above every genuine typo in the
+set — and Baltimore numbers north and south from Baltimore St, so 100 N Charles and 100 S Charles
+both exist and are different buildings.
+
+#### What replaced it
+
+Each mechanism is used only where it actually discriminates:
+
+| Component                    | Rule                                          | Why that mechanism                                                                                                                   |
+| ---------------------------- | --------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| House number, fraction, unit | **Exactly equal**                             | Structural. Neither score nor distance can do it.                                                                                    |
+| Directional, suffix          | **Equal or absent on one side**               | Absence is missing data; a difference is a different street. Catches the N/S case a score waves through.                             |
+| Street name                  | **Centroid within the market radius**         | Useless at 5 m, decisive at street scale — different streets are hundreds of metres apart. Rejects `LOMBARD`/`LOMBARDY` on geometry. |
+| —                            | Trigram similarity: **recall prefilter only** | Chooses which rows to examine, never which rows match.                                                                               |
+
+A merge now requires the house number, fraction and unit to be identical, the directional and
+suffix to be compatible, **and** the centroids to agree. No text score at any threshold can
+produce one on its own, which is a strictly stronger reading of the spec's own
+"never auto-merge on fuzzy alone" than the 0.92 rule delivered.
+
+The two thresholds live in `config/markets/baltimore.yaml` with **no code-level fallback**
+(CLAUDE.md: market parameters live in `config/`, never in code); `loadResolutionParams` throws
+if a market lacks them rather than resolving at a compiled-in value.
+
+#### Consequences to know about
+
+- **`fuzzy_address_threshold` is now a recall floor, not a safety parameter.** It is set to 0.30.
+  Lowering it costs extra rows to examine and cannot cause a merge. Raising it above ~0.5 starts
+  _losing_ legitimate typo matches. The name is kept because it is already in the seeded config;
+  the YAML comment states what it actually governs.
+- **`SAINT PAUL` / `ST PAUL` (0.462) is handled by the recall floor, not fixed properly.** The
+  right fix is a `SAINT → ST` entry in the normalizer's abbreviation table, so the two strings
+  never differ in the first place. Left as-is deliberately rather than tuning a threshold down to
+  0.45, which would be indiscriminate.
+- **The owner-name confirmer from §4.3 is still not implemented**, because no source supplies an
+  owner name — SDAT parcel points has no owner-name field (all 114 checked) and VBN has none. Not
+  stubbed: an unreachable branch cannot be tested.
+- Verified by mutation, not just by a green suite — neutering the structural gate fails exactly
+  the five merge-safety tests it is responsible for, and leaves the centroid-guarded case
+  passing.
+
+---
+
 ## Not divergences, but worth knowing
 
 **Constraint and index names.** Drizzle auto-names constraints

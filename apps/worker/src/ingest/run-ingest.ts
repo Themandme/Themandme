@@ -1,10 +1,12 @@
 import { createHash } from 'node:crypto';
 import {
   loadPredicateRegistry,
+  loadResolutionParams,
   projectProperty,
   recordFact,
   resolveProperty,
   type PredicateRegistry,
+  type ResolutionParams,
 } from '@magnolia/core';
 import { markets, rawRecords, sourceFetches, sources, type Db } from '@magnolia/db';
 import type { AdapterRegistry, DataSourceAdapter } from '@magnolia/providers';
@@ -155,6 +157,7 @@ export async function normalizePending(
   sourceId: string,
   registry: PredicateRegistry,
   marketId: string,
+  resolution: ResolutionParams,
 ): Promise<Omit<IngestReport, 'sourceKey' | 'fetched' | 'banked'>> {
   const pending = await db
     .select()
@@ -179,14 +182,14 @@ export async function normalizePending(
         });
 
         for (const fact of facts) {
-          const resolution = await resolveProperty(tx, fact.subject, { marketId });
-          if (resolution.created) propertiesCreated += 1;
+          const resolved = await resolveProperty(tx, fact.subject, { marketId, ...resolution });
+          if (resolved.created) propertiesCreated += 1;
           else propertiesMatched += 1;
-          touched.add(resolution.propertyId);
+          touched.add(resolved.propertyId);
 
           const written = await recordFact(tx, registry, {
             subjectType: 'property',
-            subjectId: resolution.propertyId,
+            subjectId: resolved.propertyId,
             predicate: fact.predicate,
             value: fact.value,
             epistemic: fact.epistemic,
@@ -253,9 +256,13 @@ export async function ingestSource(
 
   const marketId = await marketIdForSource(db, sourceKey);
   const predicates = await loadPredicateRegistry(db);
+  /* Read once per run, not once per record. These come from the market row with no code-level
+     fallback (CLAUDE.md: market parameters live in config/), so a market seeded without them
+     fails the run here rather than resolving at some compiled-in threshold. */
+  const resolution = await loadResolutionParams(db, marketId);
 
   const { fetched, banked } = await fetchIntoRawRecords(db, adapter, sourceRow.id, signal);
-  const rest = await normalizePending(db, adapter, sourceRow.id, predicates, marketId);
+  const rest = await normalizePending(db, adapter, sourceRow.id, predicates, marketId, resolution);
 
   return { sourceKey, fetched, banked, ...rest };
 }

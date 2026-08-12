@@ -1,6 +1,6 @@
+export { loadResolutionParams, type ResolutionParams } from './market-params.js';
+
 export {
-  CENTROID_CONFIRM_METRES,
-  FUZZY_THRESHOLD,
   resolveProperty,
   type ResolveOptions,
   type ResolveResult,
