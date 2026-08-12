@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import {
   loadPredicateRegistry,
   loadResolutionParams,
-  projectProperty,
+  projectProperties,
   recordFact,
   resolveProperty,
   type PredicateRegistry,
@@ -249,10 +249,12 @@ export async function normalizePending(
   }
 
   /* Project once per property rather than per fact — the read model is a pure function of
-     current facts, so intermediate projections would be wasted work. */
-  for (const propertyId of touched) {
-    await projectProperty(db, registry, propertyId);
-  }
+     current facts, so intermediate projections would be wasted work.
+
+     Batched: the per-property path costs one query per projectable column plus an UPDATE, so a
+     VBN load spent ~138,000 round trips here and most of its wall clock. `projectProperties`
+     does two queries per 500 properties instead. */
+  await projectProperties(db, registry, [...touched]);
 
   return { normalized, factsWritten, propertiesCreated, propertiesMatched, errors };
 }

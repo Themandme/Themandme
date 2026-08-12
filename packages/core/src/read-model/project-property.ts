@@ -1,6 +1,6 @@
-import { properties } from '@magnolia/db';
-import { sql } from 'drizzle-orm';
-import { preferredFact } from '../facts/conflicts.js';
+import { facts, properties, sources } from '@magnolia/db';
+import { and, eq, inArray, sql } from 'drizzle-orm';
+import { preferenceOrder, preferredFact } from '../facts/conflicts.js';
 import type { PredicateRegistry } from '../facts/predicate-registry.js';
 import type { DbOrTx } from '../facts/record-fact.js';
 
@@ -25,19 +25,32 @@ import type { DbOrTx } from '../facts/record-fact.js';
  * either silently doing nothing or naming a column that is not part of the read model. This
  * also documents, in one place, exactly which columns are derived.
  */
-const PROJECTABLE: Record<string, { nullable: boolean; fallback?: unknown }> = {
-  property_type: { nullable: true },
-  year_built: { nullable: true },
-  building_sqft: { nullable: true },
-  lot_sqft: { nullable: true },
-  beds: { nullable: true },
-  baths: { nullable: true },
-  zoning_code: { nullable: true },
-  last_sale_date: { nullable: true },
-  last_sale_price_cents: { nullable: true },
-  assessed_value_cents: { nullable: true },
+interface ProjectableColumn {
+  nullable: boolean;
+  fallback?: unknown;
+  /**
+   * The Postgres type, used to cast the batched UPDATE's `VALUES` list.
+   *
+   * Required, not inferred. A `VALUES` row of all-NULLs types itself as `text`, and the UPDATE
+   * then fails on the first integer column — so the cast has to be explicit, and it has to live
+   * next to the nullability it belongs with rather than in a second list that can drift.
+   */
+  pgType: string;
+}
+
+const PROJECTABLE: Record<string, ProjectableColumn> = {
+  property_type: { nullable: true, pgType: 'text' },
+  year_built: { nullable: true, pgType: 'integer' },
+  building_sqft: { nullable: true, pgType: 'integer' },
+  lot_sqft: { nullable: true, pgType: 'integer' },
+  beds: { nullable: true, pgType: 'numeric(4,1)' },
+  baths: { nullable: true, pgType: 'numeric(4,1)' },
+  zoning_code: { nullable: true, pgType: 'text' },
+  last_sale_date: { nullable: true, pgType: 'date' },
+  last_sale_price_cents: { nullable: true, pgType: 'bigint' },
+  assessed_value_cents: { nullable: true, pgType: 'bigint' },
   /* NOT NULL with a default in schema.sql, so an absent fact means false, not null. */
-  is_vacant_land: { nullable: false, fallback: false },
+  is_vacant_land: { nullable: false, fallback: false, pgType: 'boolean' },
 };
 
 export class UnprojectableColumnError extends Error {
@@ -116,6 +129,193 @@ export async function projectProperty(
   return { propertyId, columns };
 }
 
+/* ── Batched projection ──────────────────────────────────────────────────────────────────
+ *
+ * `projectProperty` costs one query per projectable column plus one UPDATE — about twelve round
+ * trips per property. Measured on a real VBN load: 11,513 properties took roughly 138,000
+ * queries and most of a five-minute job. SDAT's 222,703 Baltimore parcels would be ~2.7 million,
+ * which is not a slow operation so much as an impossible one.
+ *
+ * The batched path collapses that to **two queries per chunk**, regardless of chunk size: one
+ * SELECT for every current fact across every property in the chunk, and one UPDATE.
+ *
+ * The per-property function is kept rather than replaced. It is the readable definition of what
+ * projection *means*, the property test's reference implementation, and the right tool when a
+ * single property is touched. `projectionsAgree` below asserts the two agree.
+ */
+
+/**
+ * How many properties are folded into one round trip.
+ *
+ * Bounded by Postgres's 65,535 bind parameters: the UPDATE binds one id plus eleven columns per
+ * property, so 500 uses ~6,000 — comfortable, while still cutting round trips by three orders of
+ * magnitude. Larger chunks buy little and make a single failed statement more expensive to retry.
+ */
+export const PROJECTION_CHUNK_SIZE = 500;
+
+function chunk<T>(items: readonly T[], size: number): T[][] {
+  const out: T[][] = [];
+  for (let index = 0; index < items.length; index += size) {
+    out.push(items.slice(index, index + size));
+  }
+  return out;
+}
+
+/**
+ * Compute read-model values for many properties with a single query.
+ *
+ * Returns a map keyed by property id. Every requested id is present, including ones with no
+ * facts at all — those get the same defaults `computeProjection` would produce, because "no
+ * facts" must clear a stale column rather than leave it standing.
+ */
+export async function computeProjections(
+  tx: DbOrTx,
+  registry: PredicateRegistry,
+  propertyIds: readonly string[],
+): Promise<Map<string, Record<string, unknown>>> {
+  const projecting = [...registry.projecting()]
+    .filter((definition) => definition.readModelColumn !== null)
+    .sort((a, b) => (a.key < b.key ? -1 : 1));
+
+  for (const definition of projecting) {
+    const column = definition.readModelColumn;
+    if (column !== null && PROJECTABLE[column] === undefined) {
+      throw new UnprojectableColumnError(column, definition.key);
+    }
+  }
+
+  /* Defaults first, so a property with no facts still gets a complete row. */
+  const result = new Map<string, Record<string, unknown>>();
+  const empty: Record<string, unknown> = {};
+  for (const definition of projecting) {
+    const column = definition.readModelColumn;
+    if (column === null) continue;
+    const meta = PROJECTABLE[column];
+    if (meta === undefined) continue;
+    empty[column] = meta.nullable ? null : (meta.fallback ?? null);
+  }
+  for (const id of propertyIds) result.set(id, { ...empty });
+
+  if (propertyIds.length === 0 || projecting.length === 0) return result;
+
+  /* ONE query for the whole chunk. The tier join is what `preferredFact` does per call; doing it
+     once for every (property, predicate) pair is the entire saving. */
+  const rows = await tx
+    .select({
+      id: facts.id,
+      subjectId: facts.subjectId,
+      predicate: facts.predicate,
+      value: facts.value,
+      observedAt: facts.observedAt,
+      tier: sources.tier,
+    })
+    .from(facts)
+    .innerJoin(sources, eq(facts.sourceId, sources.id))
+    .where(
+      and(
+        eq(facts.subjectType, 'property'),
+        inArray(facts.subjectId, [...propertyIds]),
+        inArray(
+          facts.predicate,
+          projecting.map((definition) => definition.key),
+        ),
+        eq(facts.isCurrent, true),
+      ),
+    );
+
+  const columnFor = new Map(
+    projecting.map((definition) => [definition.key, definition.readModelColumn]),
+  );
+
+  /* Group, then pick the winner with the SAME comparator `preferredFact` uses — see
+     `preferenceOrder`. Reimplementing the order here would let a batched projection silently
+     disagree with a single one. */
+  const grouped = new Map<string, typeof rows>();
+  for (const row of rows) {
+    const key = `${row.subjectId}|${row.predicate}`;
+    const bucket = grouped.get(key);
+    if (bucket === undefined) grouped.set(key, [row]);
+    else bucket.push(row);
+  }
+
+  for (const bucket of grouped.values()) {
+    const winner = [...bucket].sort(preferenceOrder)[0];
+    if (winner === undefined) continue;
+    const column = columnFor.get(winner.predicate);
+    if (column === undefined || column === null) continue;
+    /* Read the id off the row rather than parsing it back out of the grouping key — the key
+       is an implementation detail of the grouping, not an identifier. */
+    const target = result.get(winner.subjectId);
+    if (target !== undefined) target[column] = winner.value;
+  }
+
+  return result;
+}
+
+/**
+ * Recompute and persist the read model for many properties.
+ *
+ * Two queries per chunk instead of twelve per property. Order-independent and idempotent, the
+ * same as the single-property path.
+ */
+export async function projectProperties(
+  tx: DbOrTx,
+  registry: PredicateRegistry,
+  propertyIds: readonly string[],
+): Promise<{ projected: number }> {
+  if (propertyIds.length === 0) return { projected: 0 };
+
+  /* De-duplicate: the ingestion pipeline collects touched ids in a Set, but a caller passing an
+     array with repeats would otherwise put the same id twice in one VALUES list, which Postgres
+     accepts and which makes the UPDATE's result order-dependent. */
+  const unique = [...new Set(propertyIds)];
+  let projected = 0;
+
+  for (const batch of chunk(unique, PROJECTION_CHUNK_SIZE)) {
+    const computed = await computeProjections(tx, registry, batch);
+    const columns = Object.keys(PROJECTABLE).filter((column) =>
+      [...computed.values()].some((values) => column in values),
+    );
+    if (columns.length === 0) return { projected: 0 };
+
+    /*
+     * `UPDATE … FROM (VALUES …)` — one statement for the whole chunk.
+     *
+     * Every value carries its cast, on every row rather than only the first. Postgres infers a
+     * VALUES column's type from the first row, so a chunk whose first property happens to have a
+     * NULL year_built would type that column as `text` and then fail on the next row that has an
+     * integer. Casting uniformly costs nothing and removes the ordering dependency entirely.
+     */
+    const tuples = batch.map((id) => {
+      const values = computed.get(id) ?? {};
+      const cells = columns.map((column) => {
+        const pgType = PROJECTABLE[column]?.pgType ?? 'text';
+        return sql`${values[column] ?? null}::${sql.raw(pgType)}`;
+      });
+      return sql`(${sql.join([sql`${id}::uuid`, ...cells], sql`, `)})`;
+    });
+
+    const assignments = columns.map(
+      (column) => sql`${sql.identifier(column)} = v.${sql.identifier(column)}`,
+    );
+    const columnNames = sql.join(
+      columns.map((column) => sql.identifier(column)),
+      sql`, `,
+    );
+
+    await tx.execute(sql`
+      UPDATE ${properties} AS p
+      SET ${sql.join(assignments, sql`, `)}, read_model_at = now(), updated_at = now()
+      FROM (VALUES ${sql.join(tuples, sql`, `)}) AS v(id, ${columnNames})
+      WHERE p.id = v.id
+    `);
+
+    projected += batch.length;
+  }
+
+  return { projected };
+}
+
 /**
  * Recompute every property's read model from scratch.
  *
@@ -128,10 +328,11 @@ export async function projectAll(
   registry: PredicateRegistry,
 ): Promise<{ projected: number }> {
   const rows = await tx.select({ id: properties.id }).from(properties);
-  for (const row of rows) {
-    await projectProperty(tx, registry, row.id);
-  }
-  return { projected: rows.length };
+  return projectProperties(
+    tx,
+    registry,
+    rows.map((row) => row.id),
+  );
 }
 
 /** The columns this projector owns. Exported so tests can assert nothing else writes them. */

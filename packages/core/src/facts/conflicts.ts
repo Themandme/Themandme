@@ -32,6 +32,34 @@ function rankOf(tier: string): number {
   return TIER_RANK[tier] ?? Number.MAX_SAFE_INTEGER;
 }
 
+/** The shape `preferenceOrder` needs. Deliberately minimal so any query shape can satisfy it. */
+export interface RankableFact {
+  id: string;
+  observedAt: Date;
+  tier: string;
+}
+
+/**
+ * The §4.2 preference order: tier, then most recently observed, then fact id.
+ *
+ * Exported so the batched projector sorts by *this function* rather than by a reimplementation
+ * of it. Two copies of this comparator would be two places for the read model to disagree with
+ * itself, and the disagreement would be silent — a property projected in a batch would get a
+ * different value from the same property projected alone, with nothing to indicate which was
+ * right.
+ *
+ * The id tie-break is what makes the order **total**. Without it the projector's output depends
+ * on the order Postgres happens to return rows in, and the property test's "equals a from-scratch
+ * recomputation" claim becomes a coin flip. Fact ids are UUIDv7, so it is also time-ordered.
+ */
+export function preferenceOrder(a: RankableFact, b: RankableFact): number {
+  const byTier = rankOf(a.tier) - rankOf(b.tier);
+  if (byTier !== 0) return byTier;
+  const byTime = b.observedAt.getTime() - a.observedAt.getTime();
+  if (byTime !== 0) return byTime;
+  return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
+}
+
 /** Two current values agree when they are equal, or within the predicate's tolerance. */
 export function valuesAgree(a: unknown, b: unknown, tolerance: number | null): boolean {
   if (typeof a === 'number' && typeof b === 'number' && tolerance !== null) {
@@ -252,17 +280,7 @@ export async function preferredFact(
 
   if (rows.length === 0) return undefined;
 
-  const sorted = [...rows].sort((a, b) => {
-    const byTier = rankOf(a.tier) - rankOf(b.tier);
-    if (byTier !== 0) return byTier;
-    const byTime = b.observedAt.getTime() - a.observedAt.getTime();
-    if (byTime !== 0) return byTime;
-    /* Total order matters: the projector must be deterministic regardless of row order coming
-       back from Postgres, or the property test's "equals a from-scratch recomputation" claim
-       becomes a coin flip. Fact ids are UUIDv7, so this tie-break is also time-ordered. */
-    return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
-  });
-
+  const sorted = [...rows].sort(preferenceOrder);
   const winner = sorted[0];
   return winner === undefined
     ? undefined

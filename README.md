@@ -137,14 +137,29 @@ facts 23,034 · properties 11,513 · errors 0
 fetch 53s · total 340s
 ```
 
-The fetch is not the slow part — normalization and projection are the other ~290s. Two known
-costs, one fixed and one not:
+The fetch was not the slow part — normalization and projection were the other ~290s. Both costs
+are now fixed:
 
-- **Fixed:** resolution ran once per _fact_ rather than once per _subject_, so every record paid
-  the tier-1/2/3 cascade twice (8× for SDAT). Now memoised per record.
-- **Open:** `projectProperty` runs one round trip per touched property. At 11.5k that is
-  tolerable; SDAT's 222,703 Baltimore parcels would not be. Batching the projector is the next
-  scale item, and it is the reason a full-market load is not yet a routine operation.
+- **Resolution** ran once per _fact_ rather than once per _subject_, so every record paid the
+  tier-1/2/3 cascade twice (8× for SDAT). Memoised per record.
+- **Projection** cost one query per projectable column plus an UPDATE — about twelve round trips
+  per property, so 11,513 properties meant ~138,000 queries. `projectProperties` batches to two
+  queries per 500 properties.
+
+Measured on the same 11,513 properties:
+
+| Path         | Per property | 11,513    | SDAT 222,703 (extrapolated) |
+| ------------ | ------------ | --------- | --------------------------- |
+| per-property | 9.90 ms      | ~114 s    | ~37 min                     |
+| batched      | 0.174 ms     | **2.0 s** | **~39 s**                   |
+
+A full-market SDAT load is now a routine operation rather than an overnight one.
+
+`projectProperty` is kept, not replaced: it is the readable definition of what projection means
+and the property test's reference implementation. Because the batched path reimplements winner
+selection, and the projector is the only writer of the read model (invariant 1), the two are
+tested against each other directly — a silent disagreement between them would mean a property
+projected in a batch gets a different value from the same property projected alone.
 
 ## Layout
 

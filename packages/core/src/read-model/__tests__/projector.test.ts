@@ -5,7 +5,13 @@ import fc from 'fast-check';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { loadPredicateRegistry, type PredicateRegistry } from '../../facts/predicate-registry.js';
 import { recordFact } from '../../facts/record-fact.js';
-import { computeProjection, projectAll, projectProperty } from '../project-property.js';
+import {
+  computeProjection,
+  computeProjections,
+  projectAll,
+  projectProperties,
+  projectProperty,
+} from '../project-property.js';
 
 /**
  * Read-model projector. BUILD_PLAN M1.5 and its Definition of Done:
@@ -291,5 +297,124 @@ describe('M1 DoD — read model equals a from-scratch recomputation', () => {
     for (const [column, value] of Object.entries(computed)) {
       expect(stored[column], `column ${column}`).toEqual(value);
     }
+  });
+});
+
+describe('batched projection agrees with the per-property path', () => {
+  /*
+   * The batched path is a reimplementation of the projector's winner selection, and the
+   * projector is the ONLY writer of the read model (invariant 1). If the two disagree, the
+   * disagreement is silent: a property projected in a batch gets a different value from the same
+   * property projected alone, with nothing to indicate which is right.
+   *
+   * So the batched path is not tested on its own — it is tested against the per-property one,
+   * which stays the readable definition of what projection means.
+   */
+
+  async function seedRandomFacts(propertyIds: readonly string[]): Promise<void> {
+    for (const [index, propertyId] of propertyIds.entries()) {
+      for (const spec of PROJECTING) {
+        /* Deliberately uneven: some properties get every predicate, some get a few, some get
+           none — so the batch has to produce defaults as well as values. */
+        if ((index + spec.key.length) % 3 === 0) continue;
+        await recordFact(db, registry, {
+          subjectType: 'property',
+          subjectId: propertyId,
+          predicate: spec.key,
+          /* Reuse the spec's own generator so every value satisfies its predicate schema —
+             hand-rolling values here just re-derives the registry, badly. */
+          value: fc.sample(spec.arb, { numRuns: 1, seed: index })[0],
+          epistemic: 'fact',
+          sourceId: await sourceIdByKey(
+            db,
+            SOURCE_KEYS[index % SOURCE_KEYS.length] ?? 'magnolia.human',
+          ),
+          observedAt: new Date(2026, 0, 1 + (index % 28)),
+          confidence: 0.9,
+        });
+      }
+    }
+  }
+
+  it('computes identical values for every property', async () => {
+    const ids: string[] = [];
+    for (let index = 0; index < 12; index += 1) {
+      ids.push(await createProperty(db, `${String(100 + index)} BATCH ST`));
+    }
+    await seedRandomFacts(ids);
+
+    const batched = await computeProjections(db, registry, ids);
+    for (const id of ids) {
+      const single = await computeProjection(db, registry, id);
+      expect(batched.get(id), `batched projection differs for ${id}`).toEqual(single);
+    }
+  });
+
+  it('writes identical rows', async () => {
+    const ids: string[] = [];
+    for (let index = 0; index < 8; index += 1) {
+      ids.push(await createProperty(db, `${String(200 + index)} WRITE ST`));
+    }
+    await seedRandomFacts(ids);
+
+    /* Per-property first, capture; then batched over the same data, capture again. */
+    for (const id of ids) await projectProperty(db, registry, id);
+    const singleRows = await Promise.all(ids.map((id) => storedColumns(id)));
+
+    await projectProperties(db, registry, ids);
+    const batchedRows = await Promise.all(ids.map((id) => storedColumns(id)));
+
+    expect(batchedRows).toEqual(singleRows);
+  });
+
+  it('clears columns for a property with no facts, rather than leaving them stale', async () => {
+    /* The batch must produce defaults for absent facts, not skip the property — otherwise a
+       superseded fact leaves its old value standing in the read model forever. */
+    const id = await createProperty(db, '1 EMPTY ST');
+    await recordFact(db, registry, {
+      subjectType: 'property',
+      subjectId: id,
+      predicate: 'property.year_built',
+      value: 1910,
+      epistemic: 'fact',
+      sourceId: await sourceIdByKey(db, 'md.sdat_parcel_points'),
+      observedAt: new Date('2026-01-01'),
+      confidence: 0.9,
+    });
+    await projectProperties(db, registry, [id]);
+    expect((await storedColumns(id))['year_built']).toBe(1910);
+
+    await db.delete(facts);
+    await projectProperties(db, registry, [id]);
+    const cleared = await storedColumns(id);
+    expect(cleared['year_built']).toBeNull();
+    expect(cleared['is_vacant_land'], 'NOT NULL column falls back, not nulls').toBe(false);
+  });
+
+  it('handles a chunk boundary without dropping or duplicating work', async () => {
+    /* PROJECTION_CHUNK_SIZE is 500; this drives the loop with a deliberately awkward count and
+       duplicate ids, which a caller passing an array rather than a Set can produce. */
+    const ids: string[] = [];
+    for (let index = 0; index < 5; index += 1) {
+      ids.push(await createProperty(db, `${String(300 + index)} CHUNK ST`));
+    }
+    await seedRandomFacts(ids);
+
+    const withDuplicates = [...ids, ...ids];
+    const result = await projectProperties(db, registry, withDuplicates);
+    expect(result.projected, 'duplicates must collapse').toBe(ids.length);
+
+    for (const id of ids) {
+      expect(await storedColumns(id)).toEqual(
+        await (async () => {
+          await projectProperty(db, registry, id);
+          return storedColumns(id);
+        })(),
+      );
+    }
+  });
+
+  it('projects nothing, and errors on nothing, for an empty list', async () => {
+    expect(await projectProperties(db, registry, [])).toEqual({ projected: 0 });
   });
 });
