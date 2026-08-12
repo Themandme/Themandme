@@ -264,10 +264,14 @@ export async function resolveProperty(
          * despite scoring 0.700.
          *
          * Spec §4.3 allows a matching owner name as a second confirmer. It is not implemented,
-         * because no current source supplies one — SDAT parcel points has no owner-name field at
-         * all (all 114 checked) and VBN has none either. The branch is deliberately NOT stubbed
-         * in: an unreachable path cannot be tested, and one that silently never fires is worse
-         * than an absent one that is documented. Add it with the source that makes it testable.
+         * because no *usable* source supplies one: SDAT parcel points has no owner-name field at
+         * all (all 114 checked) and VBN has none either. Baltimore's tax-sale service does carry
+         * owner names on every row, but its data is frozen at FY2021 — a five-year-old owner name
+         * is not a confirming attribute. See docs/SOURCE_VERIFICATION.md.
+         *
+         * The branch is deliberately NOT stubbed in: an unreachable path cannot be tested, and
+         * one that silently never fires is worse than an absent one that is documented. Add it
+         * with the source that makes it testable.
          */
         if (candidate.centroid_confirms === true) {
           return { created: false, propertyId: candidate.id, via: 'fuzzy_confirmed' };

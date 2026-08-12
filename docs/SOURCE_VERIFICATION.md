@@ -3,9 +3,9 @@
 Spec §4.5 marks every data source `[VERIFY]`, and BUILD_PLAN M2's Definition of Done requires
 each endpoint be verified **before** its adapter is written. This is that record.
 
-**Verified: 2026-08-11.** Re-verify before M2 adapters go live. Endpoints move and datasets go
-quiet without announcement — this document records the state on one specific day, and an
-undated "verified" claim is worth very little.
+**Verified: 2026-08-11**, `baltimore.tax_sale` added **2026-08-12**. Re-verify before M2 adapters
+go live. Endpoints move and datasets go quiet without announcement — this document records the
+state on specific days, and an undated "verified" claim is worth very little.
 
 ---
 
@@ -92,6 +92,58 @@ open data; there may be a replacement publication.
 
 **This must not be wired to `foreclosure.filed`.** See the safety note below.
 
+### `baltimore.tax_sale` — Tax Sale ⚠️ located, frozen at FY2021
+
+**Located** — the previous pass recorded this as "not found", which was wrong. It is not on the
+DHCD FeatureServer with the other Baltimore layers; it is its own service under the Department
+of Finance folder, which is why a search of the DHCD service missed it.
+
+- **Endpoint:** `https://egisdata.baltimorecity.gov/egis/rest/services/DOF/TaxSale/MapServer`
+- **Type:** MapServer (like SDAT, unlike the DHCD layers) · **maxRecordCount:** 1000
+- **Capabilities:** `Map,Query,Data`
+
+| Layer | Name                          | `where=1=1&returnCountOnly=true` |
+| ----- | ----------------------------- | -------------------------------- |
+| 0     | `FY2021_TaxSale_LiensRemoved` | `{"count":933}`                  |
+| 1     | `FY2021_TaxSale`              | `{"count":9485}`                 |
+| 2     | `FY18_20_TaxParticipation`    | `{"count":28147}`                |
+
+- **Fields (identical on all three):** `BLOCK`, `LOT`, `BLOCKLOT`, `ADDRESS`, `ZipCode`,
+  `NEIGHBORHOOD`, `OWNER`, `TaxSale_Year`
+
+#### Why it is not usable, despite responding
+
+1. **There is no date field.** `TaxSale_Year` is the only candidate and it is `null` on every
+   record sampled across all three layers. The service's own description names its contents as
+   "FY2018-2020 … FY2021" — the recency is in the _layer names_, not in the data.
+2. **The recency probe cannot be run at all.** Every other entry in this document cites a
+   `where <DateField> >= timestamp '…'` count query. There is no date field to filter on, so
+   that method does not apply here. This entry rests on the layer names and the service
+   description instead, and that weaker basis is stated rather than papered over.
+3. **The newest data is FY2021 — five years stale.**
+
+`tax.on_sale_list` (signal weight 0.22, second heaviest) is a **current-state** signal: it
+asserts that a property _is_ on the tax sale list. A FY2021 snapshot cannot answer that in 2026,
+and recording it would assert a stale fact as current in a signal that drives outreach.
+
+`tax.delinquent_balance_cents` has **no source here at all** — there is no balance, amount or
+lien-value field in the schema.
+
+**Do not write the adapter for either predicate.** Baltimore's tax sale is an annual auction and
+the current-year list is published by the Bureau of Revenue Collections as a document rather than
+as a queryable layer, which is a fit for the M2.6 manual-upload path, not for an ArcGIS adapter.
+An ArcGIS Hub search surfaced no current Baltimore tax-sale service; the newest related item is a
+2021 list.
+
+#### One useful finding
+
+**`OWNER` is populated on 100% of rows** (`where OWNER IS NOT NULL` → `{"count":9485}` against a
+total of 9485). This is the first Baltimore source seen to carry owner names, and it bears on two
+things currently documented as blocked: spec §4.3's owner-name confirming attribute for entity
+resolution, and person resolution generally. It does **not** unblock them — a 2021 owner name is
+exactly the kind of stale personal data that must not drive outreach — but it does mean the
+obstacle is this dataset's age, not the absence of the field city-wide.
+
 ---
 
 ## Structure confirmed, recency not yet measured
@@ -119,9 +171,10 @@ normalizers.
 
 Nothing below has been confirmed. Do not write an adapter against any of it first.
 
-- **`baltimore.tax_sale`** — not located this pass. Feeds `tax.on_sale_list` (signal weight
-  0.22, second highest) and `tax.delinquent_balance_cents`. Highest priority remaining.
 - **`baltimore.code_violations`** — not located this pass. Feeds `code.violation_open_count`.
+  Now the highest-priority remaining gap, since `tax_sale` resolved to "found but frozen" above.
+  Worth searching the per-department folders (`DOF`, `Housing`, `311`, `Transportation`,
+  `Utilities`, `CityView`) rather than only the DHCD service — that is how `tax_sale` was missed.
 - **`baltimore.311`** — datasets exist but are **partitioned by calendar year**
   (`311 Customer Service Requests 2019` … `2026`), which an adapter must handle and roll over
   annually. A consolidated `Customer_Service_Request311_2021_Present` layer appeared in search
@@ -172,6 +225,25 @@ A dataset that stops updating still returns HTTP 200 with a well-formed, empty d
 and the source looks healthy while producing nothing. That is precisely the Foreclosure
 Filings failure, and nothing in the current design would have caught it.
 
-**Proposed, to be wired in M2:** a freshness check distinct from fetch success — compare
-`max(facts.observed_at)` per source against that source's expected cadence and alert past a
-multiple of it. It needs no schema change; it computes from facts already recorded.
+**Two of the sixteen seeded sources have now failed this way** — Foreclosure Filings (silent
+since 2020) and Tax Sale (frozen at FY2021). Both feed high-weight signals. That is no longer a
+one-off worth noting; it is the most common failure mode observed in this codebase so far.
+
+**Tax Sale is the harder variant.** Foreclosure Filings at least has a date field, so
+`max(facts.observed_at)` would eventually reveal the silence. Tax Sale has **no date field at
+all**, so a freshness check computed from facts cannot distinguish "frozen since 2021" from
+"correct and unchanging" — every fetch returns the same 9,485 rows, forever, and every one of
+them would look freshly observed.
+
+**Proposed, to be wired in M2**, in two parts:
+
+1. **Freshness from facts** — compare `max(facts.observed_at)` per source against that source's
+   expected cadence and alert past a multiple of it. No schema change; computes from facts
+   already recorded. Catches the Foreclosure Filings shape.
+2. **Payload-stability check** — flag a source whose every fetch banks zero new `raw_records`
+   for longer than its cadence. `raw_records_dedupe` already makes this observable: `banked=0`
+   across consecutive runs is exactly the signal, and `IngestReport.banked` already reports it.
+   Catches the Tax Sale shape, where the data has no date to be stale by.
+
+Neither replaces verification. A source with no date field cannot have its recency measured from
+the outside at all, which is why the entry above rests on layer names and says so.

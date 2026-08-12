@@ -204,9 +204,11 @@ if a market lacks them rather than resolving at a compiled-in value.
   right fix is a `SAINT → ST` entry in the normalizer's abbreviation table, so the two strings
   never differ in the first place. Left as-is deliberately rather than tuning a threshold down to
   0.45, which would be indiscriminate.
-- **The owner-name confirmer from §4.3 is still not implemented**, because no source supplies an
-  owner name — SDAT parcel points has no owner-name field (all 114 checked) and VBN has none. Not
-  stubbed: an unreachable branch cannot be tested.
+- **The owner-name confirmer from §4.3 is still not implemented**, because no _usable_ source
+  supplies an owner name — SDAT parcel points has no owner-name field (all 114 checked) and VBN
+  has none. Baltimore's tax-sale service does carry one on every row, but its data is frozen at
+  FY2021, and a five-year-old owner name is not a confirming attribute. Not stubbed: an
+  unreachable branch cannot be tested.
 - Verified by mutation, not just by a green suite — neutering the structural gate fails exactly
   the five merge-safety tests it is responsible for, and leaves the centroid-guarded case
   passing.
