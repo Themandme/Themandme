@@ -19,7 +19,7 @@ has not been supplied.
 
 ## Quickstart
 
-Requires Node 22+, pnpm 10+, and Docker.
+Requires Node 22+, pnpm 10+, and Docker — or native Postgres and Redis, see below.
 
 ```bash
 pnpm install
@@ -39,6 +39,43 @@ pnpm check                    # lint + typecheck + format + test
 | `pnpm db:up`     | Start Postgres and Redis                        |
 | `pnpm db:reset`  | Drop the volumes and re-run the init SQL        |
 | `pnpm db:psql`   | psql into the local database                    |
+
+### Without Docker
+
+`pnpm db:up` needs a working Docker daemon, and some sandboxed environments cannot run one. The
+specific failure to recognise: `/etc/init.d/docker` raises the hard file-descriptor limit on
+`start`, which requires `CAP_SYS_RESOURCE`. Where that capability is dropped the script aborts
+**before `dockerd` is ever exec'd**, so a stale `/var/run/docker.sock` remains and `docker ps`
+reports "Cannot connect to the Docker daemon" — which reads like a crashed daemon rather than
+one that never launched. Confirm with `pgrep dockerd` (nothing) and
+`grep CapBnd /proc/self/status` (bit 24 clear).
+
+Nothing in the stack actually needs Docker; it is packaging convenience. Both services run
+natively:
+
+```bash
+# Postgres 16 + PostGIS 3.4
+sudo apt-get install -y postgresql-16 postgresql-16-postgis-3
+sudo pg_ctlcluster 16 main start
+sudo -u postgres psql -c "CREATE ROLE magnolia LOGIN SUPERUSER PASSWORD 'magnolia'"
+sudo -u postgres psql -c "CREATE DATABASE magnolia OWNER magnolia"
+psql "$DATABASE_URL" -c "CREATE EXTENSION postgis; CREATE EXTENSION pg_trgm; CREATE EXTENSION pgcrypto"
+
+# Redis
+redis-server --daemonize yes --port 6379
+
+pnpm --filter @magnolia/db migrate
+pnpm --filter @magnolia/db seed
+```
+
+The three extensions are not optional: `postgis` for `properties.centroid` and `parcels.geom`,
+`pg_trgm` for the entity-resolution recall prefilter, `pgcrypto` for the schema's defaults.
+drizzle-kit does not emit `CREATE EXTENSION`, so migration `0000` carries them in a hand-written
+prelude — see `packages/db/DIVERGENCES.md` before regenerating migrations.
+
+The database- and Redis-backed suites **fail** rather than skip when a service is unreachable. A
+skipped test and a passing one look identical in a CI summary, and those suites are the only
+thing checking the fact-ledger invariants and that a ToS-restricted source cannot be enqueued.
 
 ## Layout
 

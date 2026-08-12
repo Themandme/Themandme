@@ -22,3 +22,15 @@ export {
   payloadHash,
   type IngestReport,
 } from './ingest/run-ingest.js';
+
+export { createProductionRegistry, type ProductionRegistryOptions } from './ingest/registry.js';
+
+export {
+  createScheduler,
+  formatSchedule,
+  INGEST_QUEUE_NAME,
+  ingestJobId,
+  type Scheduler,
+  type SchedulerOptions,
+  type SweepOutcome,
+} from './scheduler.js';
