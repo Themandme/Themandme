@@ -19,5 +19,9 @@
   },
   "devDependencies": {
     "@magnolia/testkit": "workspace:*"
+  },
+  "scripts": {
+    "start": "node --experimental-strip-types --env-file-if-exists=../../.env src/main.ts",
+    "dev": "tsx watch --env-file-if-exists=../../.env src/main.ts"
   }
 }

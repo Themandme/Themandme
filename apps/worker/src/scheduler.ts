@@ -2,6 +2,7 @@ import { classifySources, dueNow, formatSchedule, type SourceSchedule } from '@m
 import type { Db } from '@magnolia/db';
 import { Queue } from 'bullmq';
 import IORedis from 'ioredis';
+import { INGEST_JOB_OPTIONS, INGEST_QUEUE_NAME } from './queues.js';
 
 /**
  * Ingestion scheduler. BUILD_PLAN M2.1.
@@ -17,8 +18,6 @@ import IORedis from 'ioredis';
  * source can be disabled between the sweep that enqueued it and the worker that runs it, and a
  * kill switch that only takes effect at scheduling time is not a kill switch.
  */
-
-export const INGEST_QUEUE_NAME = 'magnolia.ingest';
 
 export interface SchedulerOptions {
   redisUrl: string;
@@ -77,9 +76,8 @@ export function createScheduler(db: Db, options: SchedulerOptions): Scheduler {
         'ingest',
         { sourceKey: schedule.key, sourceId: schedule.sourceId },
         {
+          ...INGEST_JOB_OPTIONS,
           jobId: ingestJobId(schedule.key, schedule.state.dueSince),
-          removeOnComplete: 1000,
-          removeOnFail: 5000,
         },
       );
       enqueued.push(schedule.key);
@@ -118,4 +116,4 @@ export function createScheduler(db: Db, options: SchedulerOptions): Scheduler {
   };
 }
 
-export { formatSchedule };
+export { formatSchedule, INGEST_QUEUE_NAME };

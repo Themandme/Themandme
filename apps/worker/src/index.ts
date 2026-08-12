@@ -7,12 +7,7 @@
 
 export const APP_NAME = '@magnolia/worker';
 
-export {
-  createPublisher,
-  OUTBOX_QUEUE_NAME,
-  type Publisher,
-  type PublisherOptions,
-} from './publisher.js';
+export { createPublisher, type Publisher, type PublisherOptions } from './publisher.js';
 
 export {
   fetchIntoRawRecords,
@@ -28,7 +23,6 @@ export { createProductionRegistry, type ProductionRegistryOptions } from './inge
 export {
   createScheduler,
   formatSchedule,
-  INGEST_QUEUE_NAME,
   ingestJobId,
   type Scheduler,
   type SchedulerOptions,
@@ -43,3 +37,13 @@ export {
   type ManualProvenance,
   type ManualUploadOptions,
 } from './ingest/manual-upload.js';
+
+export {
+  createIngestWorker,
+  type IngestJobData,
+  type IngestWorkerOptions,
+} from './ingest/ingest-worker.js';
+
+export { createLogger, LOG_LEVELS, type Logger, type LogLevel } from './logger.js';
+
+export { INGEST_JOB_OPTIONS, INGEST_QUEUE_NAME, OUTBOX_QUEUE_NAME } from './queues.js';

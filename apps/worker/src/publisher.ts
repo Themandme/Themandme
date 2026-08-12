@@ -2,6 +2,7 @@ import { publishBatch, type OutboxEvent, type PublishOutcome } from '@magnolia/c
 import type { Db } from '@magnolia/db';
 import { Queue } from 'bullmq';
 import IORedis from 'ioredis';
+import { OUTBOX_QUEUE_NAME } from './queues.js';
 
 /**
  * Outbox publisher. BUILD_PLAN M1.6.
@@ -14,8 +15,6 @@ import IORedis from 'ioredis';
  * locks are held until commit, so several publisher instances can run at once without
  * double-publishing.
  */
-
-export const OUTBOX_QUEUE_NAME = 'magnolia.events';
 
 export interface PublisherOptions {
   redisUrl: string;

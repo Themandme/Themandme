@@ -37,8 +37,22 @@ jobs:
           --health-timeout 5s
           --health-retries 20
 
+      # M2.1 added the ingest scheduler, whose queue behaviour is tested against a real Redis
+      # for the same reason Postgres is here: those tests fail rather than skip, and they are
+      # the only check that a ToS-restricted source can never be enqueued.
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+
     env:
       DATABASE_URL: postgres://magnolia:magnolia@localhost:5432/magnolia
+      REDIS_URL: redis://localhost:6379
 
     steps:
       - uses: actions/checkout@v4

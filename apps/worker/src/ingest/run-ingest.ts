@@ -181,15 +181,40 @@ export async function normalizePending(
           observedAt: record.observedAt,
         });
 
+        /*
+         * One resolution per SUBJECT, not per fact.
+         *
+         * Adapters emit several facts about the same property from one record — VBN emits two,
+         * SDAT eight — and every one of them carried the identical `PropertyRef` through the
+         * full tier-1/tier-2/tier-3 cascade. Measured on a real VBN load: 11,536 records
+         * produced 23,072 resolutions, exactly 2.00 per record, all but 11,536 of them
+         * redundant. On SDAT's 222,703 Baltimore parcels that multiplier is eight.
+         *
+         * The memo is scoped to this record, inside this transaction, so it cannot serve a
+         * stale id across records and does not change what gets written — only how many times
+         * the same question is asked.
+         */
+        const resolvedBySubject = new Map<string, string>();
+
         for (const fact of facts) {
-          const resolved = await resolveProperty(tx, fact.subject, { marketId, ...resolution });
-          if (resolved.created) propertiesCreated += 1;
-          else propertiesMatched += 1;
-          touched.add(resolved.propertyId);
+          const subjectKey = JSON.stringify(fact.subject);
+          const memoised = resolvedBySubject.get(subjectKey);
+
+          let propertyId: string;
+          if (memoised !== undefined) {
+            propertyId = memoised;
+          } else {
+            const resolved = await resolveProperty(tx, fact.subject, { marketId, ...resolution });
+            if (resolved.created) propertiesCreated += 1;
+            else propertiesMatched += 1;
+            propertyId = resolved.propertyId;
+            resolvedBySubject.set(subjectKey, propertyId);
+          }
+          touched.add(propertyId);
 
           const written = await recordFact(tx, registry, {
             subjectType: 'property',
-            subjectId: resolved.propertyId,
+            subjectId: propertyId,
             predicate: fact.predicate,
             value: fact.value,
             epistemic: fact.epistemic,

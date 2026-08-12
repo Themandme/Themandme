@@ -1,8 +1,10 @@
 /**
  * @magnolia/api — Fastify server, REST + webhooks.
  *
- * Populated by BUILD_PLAN M8 (dashboard auth, next-action endpoints) and M7 (inbound comms
- * webhooks). M0 establishes the app boundary only.
+ * Currently the operational surface only (`/health`, `/ready`). The REST endpoints arrive with
+ * BUILD_PLAN M7 (inbound comms webhooks) and M8 (operator dashboard).
  */
 
 export const APP_NAME = '@magnolia/api';
+
+export { createServer, type DependencyStatus, type ServerOptions } from './server.js';

@@ -77,6 +77,63 @@ The database- and Redis-backed suites **fail** rather than skip when a service i
 skipped test and a passing one look identical in a CI summary, and those suites are the only
 thing checking the fact-ledger invariants and that a ToS-restricted source cannot be enqueued.
 
+## Running it
+
+```bash
+pnpm dev:worker     # scheduler + ingest consumer + outbox publisher
+pnpm dev:api        # Fastify, /health and /ready
+
+pnpm stack:up       # or: everything in containers, app profile
+pnpm stack:logs
+```
+
+**Booting enables nothing.** Every external source seeds `enabled: false` with its kill switch
+off (invariant 8), so a fresh worker sweeps, finds everything refused, logs the reason per
+source, and fetches nothing. That is the intended day-one state. To actually run a source you
+must turn on both the `sources` row and its `source.<key>` feature flag — two deliberate acts.
+
+### Operational endpoints
+
+| Endpoint  | Checks                 | Use for                                             |
+| --------- | ---------------------- | --------------------------------------------------- |
+| `/health` | nothing — process only | liveness probe, container healthcheck               |
+| `/ready`  | Postgres + Redis       | load-balancer readiness; 503 when a dependency down |
+
+Keep these distinct. Pointing a **liveness** probe at `/ready` means a brief Postgres blip marks
+every replica unhealthy, the orchestrator restarts them all at once, and they stampede a database
+that is already struggling. `/ready` returning 503 pulls one replica out of rotation and lets it
+rejoin by itself — verified: with Redis stopped, `/health` stays 200 while `/ready` returns 503
+in under 3 ms naming the failed dependency, and recovers with no restart.
+
+### Signals
+
+Both processes shut down gracefully on SIGTERM — the worker stops the scheduler first, drains
+in-flight ingest jobs, then closes the pool.
+
+**Do not wrap them in `npx`.** `npx` does not forward SIGTERM: signalling it kills the wrapper
+and leaves the Node process orphaned, still holding queue locks. Observed directly while testing
+this. `pnpm start:*` and the container `CMD` both exec `node` so the signal lands on the right
+process; the image also uses tini as an init for the same reason.
+
+### Measured throughput
+
+A full live `baltimore.vbn` load, 2026-08-12:
+
+```
+fetched 11,536 · banked 11,536 · normalized 11,536
+facts 23,034 · properties 11,513 · errors 0
+fetch 53s · total 340s
+```
+
+The fetch is not the slow part — normalization and projection are the other ~290s. Two known
+costs, one fixed and one not:
+
+- **Fixed:** resolution ran once per _fact_ rather than once per _subject_, so every record paid
+  the tier-1/2/3 cascade twice (8× for SDAT). Now memoised per record.
+- **Open:** `projectProperty` runs one round trip per touched property. At 11.5k that is
+  tolerable; SDAT's 222,703 Baltimore parcels would not be. Batching the projector is the next
+  scale item, and it is the reason a full-market load is not yet a routine operation.
+
 ## Layout
 
 ```

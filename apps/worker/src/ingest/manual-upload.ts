@@ -77,6 +77,16 @@ export class ManualUploadError extends Error {
   }
 }
 
+/**
+ * The adapter shape requires a `fetch`, but `normalizePending` only reads already-banked rows,
+ * so this is never called. Defined as a real (empty) async generator rather than a throwing stub:
+ * an unreachable throw becomes a landmine if the call path ever changes, whereas yielding nothing
+ * is correct under any caller.
+ */
+async function* emptyFetch(): AsyncGenerator<RawRecord> {
+  /* intentionally empty */
+}
+
 /** Multiplied into each fact's confidence when `provenance === 'transcribed'`. */
 export const TRANSCRIPTION_CONFIDENCE_FACTOR = 0.9;
 
@@ -212,11 +222,7 @@ export async function ingestManualUpload(
       tier: 'human',
       scrapingAllowed: false,
       costModel: { perCallCents: 0, monthlyCents: 0 },
-      fetch: async function* (): AsyncGenerator<RawRecord> {
-        /* Never called: `normalizePending` only reads already-banked rows. Present because the
-           adapter shape requires it, and throwing here would be a landmine if that ever
-           changes. */
-      },
+      fetch: () => emptyFetch(),
       normalize,
       healthCheck: () =>
         Promise.resolve({ ok: true, detail: 'manual upload', checkedAt: new Date() }),

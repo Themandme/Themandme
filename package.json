@@ -22,7 +22,14 @@
     "db:up": "docker compose up -d",
     "db:down": "docker compose down",
     "db:reset": "docker compose down -v && docker compose up -d",
-    "db:psql": "docker compose exec postgres psql -U magnolia -d magnolia"
+    "db:psql": "docker compose exec postgres psql -U magnolia -d magnolia",
+    "dev:api": "pnpm --filter @magnolia/api dev",
+    "dev:worker": "pnpm --filter @magnolia/worker dev",
+    "start:api": "pnpm --filter @magnolia/api start",
+    "start:worker": "pnpm --filter @magnolia/worker start",
+    "stack:up": "docker compose --profile app up -d --build",
+    "stack:down": "docker compose --profile app down",
+    "stack:logs": "docker compose --profile app logs -f api worker"
   },
   "pnpm": {
     "onlyBuiltDependencies": [
