@@ -347,6 +347,61 @@ this way names the person who supplied it. Automated access remains refused by
 `registry.requireRunnable` and by the scheduler; both have tests asserting these two sources can
 never be fetched or enqueued.
 
+### `address_hash` falls back to the APN when there is no address
+
+Spec §4.3 defines `properties.address_hash` as `sha256(address_norm || postal_code)`, and
+`schema.sql` makes it `NOT NULL` with `UNIQUE (market_id, address_hash)`.
+
+**Here:** when `address_norm` is empty, the hash is computed over `apn:<apn>` instead, and the
+tier-2 lookup is skipped entirely.
+
+#### Why
+
+The §4.3 formula is right whenever there is an address and actively harmful when there is not.
+With an empty `address_norm` it collapses to `sha256('' || zip)` — **the same value for every
+address-less parcel in a ZIP**. Because the column is `NOT NULL UNIQUE`, those parcels cannot
+merely fail to match one another; the constraint forces them onto a single row.
+
+This was not theoretical. Measured on the loaded Baltimore market:
+
+|                                   |                      |
+| --------------------------------- | -------------------- |
+| Distinct parcels collapsed        | **4,444**            |
+| Property rows they collapsed into | **31** — one per ZIP |
+| Largest single row                | **591 parcels**      |
+
+Every one of those rows then carried thrashing owner facts: each parcel's
+`owner.mailing_address` superseded the last, so the "current" owner was whichever parcel had been
+normalized most recently. It surfaced as ~1,500 supersede events that changed the owner's _state_
+in near-symmetric pairs (`MD`→`FL` 128 against `FL`→`MD` 129) and as `owner.out_of_state` moving
+by 2 between two runs of `pnpm signals:census` over unchanged data.
+
+This is the failure tier 3 already refuses by name — _"a duplicate that reaches a human is
+recoverable, a silent merge is not"_ — arriving through tier 2, which had no equivalent guard.
+
+#### Why the APN
+
+It is a real identity where the address is not. `ACCTID` is present on **all** 237,260 Baltimore
+parcels and unique across every one of them, so the fallback covers 100% of the cases that need
+it rather than most of them.
+
+The `apn:` prefix keeps those values in a space a genuine address hash cannot reach: a real
+`address_norm` always begins with a house number or a street word, never with `apn:`.
+
+#### The residual
+
+A reference with neither an address nor an APN has no identity at all, and this does not invent
+one — it falls back to the §4.3 formula, which for two such records means a unique-constraint
+violation rather than a silent merge. `propertyRef` drops those records before resolution, so
+the case is a floor rather than a path. Failing loudly is the correct behaviour if it is ever
+reached.
+
+#### Reversibility
+
+Narrow. The fallback only fires where §4.3's formula has no input, so every address-bearing
+property keeps exactly the hash the spec prescribes. Reverting means re-resolving address-less
+parcels, not the whole market.
+
 ---
 
 ## Not divergences, but worth knowing

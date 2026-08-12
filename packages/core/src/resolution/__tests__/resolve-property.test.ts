@@ -3,7 +3,7 @@ import { baltimoreMarketId, createTestDb, type TestDb } from '@magnolia/testkit'
 import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { loadResolutionParams, type ResolutionParams } from '../market-params.js';
-import { resolveProperty, type ResolveOptions } from '../resolve-property.js';
+import { resolveProperties, resolveProperty, type ResolveOptions } from '../resolve-property.js';
 import type { PropertyRef } from '../types.js';
 
 /** Property entity resolution. Spec §4.3 as amended — see packages/db/DIVERGENCES.md. */
@@ -117,6 +117,134 @@ describe('tier 2 — exact normalized address', () => {
     expect(second.via).toBe('address_hash');
     expect(second.propertyId).toBe(first.propertyId);
     expect(await db.select().from(properties)).toHaveLength(1);
+  });
+});
+
+describe('an unparseable address is not an identity', () => {
+  /*
+   * Found by auditing the loaded Baltimore market, not by reading the spec.
+   *
+   * §4.3 defines `address_hash = sha256(address_norm || postal_code)`. When the address
+   * normalizes to nothing that degenerates to `sha256('' || zip)` — **identical for every
+   * address-less parcel in the same ZIP** — and tier 2 then merges them all into one property.
+   *
+   * Measured on the live SDAT load: 4,444 distinct parcels collapsed into 31 property rows, one
+   * per ZIP, the worst holding 591. Their owner facts thrash, because each parcel's owner
+   * supersedes the previous one and "current owner" becomes whichever parcel was normalized
+   * last.
+   *
+   * This is the failure tier 3 already refuses by name — "a duplicate that reaches a human is
+   * recoverable, a silent merge is not" — arriving through tier 2, which had no such guard.
+   */
+  it('does not merge two address-less parcels that share a ZIP', async () => {
+    const a = await resolveProperty(
+      db,
+      ref({ apn: 'ACCT-A', addressLine1: '', postalCode: '21215' }),
+      opts(),
+    );
+    const b = await resolveProperty(
+      db,
+      ref({ apn: 'ACCT-B', addressLine1: '', postalCode: '21215' }),
+      opts(),
+    );
+
+    expect(b.created).toBe(true);
+    expect(b.propertyId).not.toBe(a.propertyId);
+    expect(await db.select().from(properties)).toHaveLength(2);
+  });
+
+  it('still resolves an address-less parcel to itself by APN', async () => {
+    /* Splitting them must not cost idempotency (invariant 7): the same parcel seen twice is
+       still one property. */
+    const first = await resolveProperty(
+      db,
+      ref({ apn: 'ACCT-A', addressLine1: '', postalCode: '21215' }),
+      opts(),
+    );
+    const again = await resolveProperty(
+      db,
+      ref({ apn: 'ACCT-A', addressLine1: '', postalCode: '21215' }),
+      opts(),
+    );
+
+    expect(again.created).toBe(false);
+    if (again.created) return;
+    expect(again.via).toBe('apn');
+    expect(again.propertyId).toBe(first.propertyId);
+    expect(await db.select().from(properties)).toHaveLength(1);
+  });
+
+  it('does not let an address-less parcel collide with a real address', async () => {
+    /* The APN-derived hash occupies the same NOT NULL UNIQUE column as a real address hash, so
+       it must live in a space a genuine address can never reach. */
+    const real = await resolveProperty(
+      db,
+      ref({ apn: 'ACCT-REAL', addressLine1: '2831 Guilford Ave', postalCode: '21218' }),
+      opts(),
+    );
+    const blank = await resolveProperty(
+      db,
+      ref({ apn: 'ACCT-BLANK', addressLine1: '', postalCode: '21218' }),
+      opts(),
+    );
+
+    expect(blank.propertyId).not.toBe(real.propertyId);
+    expect(await db.select().from(properties)).toHaveLength(2);
+  });
+
+  it('enforces the same rule in the batched path', async () => {
+    /*
+     * The batched path is what ingestion actually calls, so a rule enforced only in
+     * `resolveProperty` would be enforced nowhere that matters — and this is precisely how the
+     * production merge happened. Same principle as `recordFacts`: the batched door must not be
+     * weaker than the single one.
+     */
+    const result = await resolveProperties(
+      db,
+      [
+        ref({ apn: 'ACCT-A', addressLine1: '', postalCode: '21215' }),
+        ref({ apn: 'ACCT-B', addressLine1: '', postalCode: '21215' }),
+        ref({ apn: 'ACCT-C', addressLine1: '', postalCode: '21215' }),
+      ],
+      opts(),
+    );
+
+    const ids = new Set([...result.byIndex.values()]);
+    expect(ids.size).toBe(3);
+    expect(await db.select().from(properties)).toHaveLength(3);
+  });
+
+  it('batched and single-reference paths agree', async () => {
+    /* A silent disagreement between them means a parcel resolved in a chunk lands on a different
+       row from the same parcel resolved alone — which is a merge that only appears under load. */
+    const single = await resolveProperty(
+      db,
+      ref({ apn: 'ACCT-A', addressLine1: '', postalCode: '21215' }),
+      opts(),
+    );
+    const batched = await resolveProperties(
+      db,
+      [ref({ apn: 'ACCT-A', addressLine1: '', postalCode: '21215' })],
+      opts(),
+    );
+    expect(batched.byIndex.get(0)).toBe(single.propertyId);
+    expect(await db.select().from(properties)).toHaveLength(1);
+  });
+
+  it('treats punctuation-only text as no address rather than as an address', async () => {
+    /* `address_norm` is empty either way; what matters is that the resolver keys off the parsed
+       result, not off whether the raw input happened to be non-empty. */
+    const a = await resolveProperty(
+      db,
+      ref({ apn: 'ACCT-A', addressLine1: '...', postalCode: '21215' }),
+      opts(),
+    );
+    const b = await resolveProperty(
+      db,
+      ref({ apn: 'ACCT-B', addressLine1: '', postalCode: '21215' }),
+      opts(),
+    );
+    expect(b.propertyId).not.toBe(a.propertyId);
   });
 });
 

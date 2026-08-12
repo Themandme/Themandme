@@ -148,6 +148,43 @@ function isUniqueViolation(error: unknown): boolean {
 }
 
 /**
+ * The value stored in `properties.address_hash`, and the tier-2 lookup key.
+ *
+ * Spec §4.3 defines this as `sha256(address_norm || postal_code)`. That is right whenever there
+ * IS an address, and actively wrong when there is not: an empty `address_norm` collapses the
+ * definition to `sha256('' || zip)`, which is **the same value for every address-less parcel in
+ * a ZIP**. The column is `NOT NULL UNIQUE (market_id, address_hash)`, so those parcels cannot
+ * merely fail to match — they are forced onto one row.
+ *
+ * Measured on the live SDAT load before this guard existed: 4,444 distinct parcels collapsed
+ * into 31 property rows, one per ZIP, the largest holding 591. Owner facts on those rows thrash,
+ * since each parcel supersedes the last and "current owner" becomes whichever was normalized
+ * most recently — visible as symmetric state flips between census runs.
+ *
+ * So when there is no address, identity falls back to the APN, which for SDAT is `ACCTID` and is
+ * unique across all 237,260 Baltimore parcels. The `apn:` prefix keeps that value in a space a
+ * real address hash cannot reach: a genuine `address_norm` always begins with a house number or
+ * a street word, never with `apn:`.
+ *
+ * Recorded in packages/db/DIVERGENCES.md — this is a deliberate deviation from §4.3's formula,
+ * confined to the case where the formula has no input.
+ */
+export function propertyIdentityHash(
+  addressNorm: string,
+  postalCode: string | null,
+  apn: string | null,
+): Buffer {
+  if (addressNorm !== '') return addressHash(addressNorm, postalCode);
+  if (apn !== null && apn !== '') return addressHash(`apn:${apn}`, null);
+  /*
+   * Neither an address nor an APN is not an identity at all, and there is nothing to key on.
+   * `propertyRef` drops such records before they reach here, so this is a floor rather than a
+   * path: it keeps the function total instead of inventing a key that would merge silently.
+   */
+  return addressHash(addressNorm, postalCode);
+}
+
+/**
  * Resolve a `PropertyRef` to a property id, creating one when nothing matches.
  *
  * Should be called inside the caller's transaction so that the property, its facts and any
@@ -161,7 +198,7 @@ export async function resolveProperty(
   const { marketId } = options;
   const parsed = normalizeAddress(ref.addressLine1);
   const addressNorm = parsed.normalized;
-  const hash = addressHash(addressNorm, ref.postalCode);
+  const hash = propertyIdentityHash(addressNorm, ref.postalCode, ref.apn);
 
   // ── Tier 1: APN ──────────────────────────────────────────────────────────────────────
   if (options.exactTiersAlreadyMissed !== true && ref.apn !== null && ref.apn !== '') {
@@ -173,8 +210,14 @@ export async function resolveProperty(
     if (byApn !== undefined) return { created: false, propertyId: byApn.id, via: 'apn' };
   }
 
-  // ── Tier 2: exact normalized address ─────────────────────────────────────────────────
-  if (options.exactTiersAlreadyMissed !== true) {
+  /*
+   * ── Tier 2: exact normalized address ────────────────────────────────────────────────
+   *
+   * Skipped outright when there is no address. `hash` is APN-derived in that case, so the lookup
+   * would only ever re-find this same parcel — but skipping states the rule rather than relying
+   * on the hash to enforce it, and leaves tier 1 as the only way an address-less parcel matches.
+   */
+  if (options.exactTiersAlreadyMissed !== true && addressNorm !== '') {
     const [byHash] = await tx
       .select({ id: properties.id })
       .from(properties)
@@ -401,9 +444,19 @@ export async function resolveProperties(
 
   const { marketId } = options;
 
+  /*
+   * `hasAddress` rides along because tier 2 must be skipped without one, exactly as in the
+   * single-reference path. This batched path is not allowed to be a weaker door into resolution
+   * than `resolveProperty`: a merge rule enforced in one and not the other means a property
+   * resolved in a chunk gets a different answer from the same property resolved alone.
+   */
   const parsed = refs.map((ref) => {
-    const normalized = normalizeAddress(ref.addressLine1);
-    return { ref, hash: addressHash(normalized.normalized, ref.postalCode) };
+    const addressNorm = normalizeAddress(ref.addressLine1).normalized;
+    return {
+      ref,
+      hasAddress: addressNorm !== '',
+      hash: propertyIdentityHash(addressNorm, ref.postalCode, ref.apn),
+    };
   });
 
   /* Tier 1, once for the chunk. */
@@ -421,8 +474,10 @@ export async function resolveProperties(
     for (const row of rows) if (row.apn !== null) byApn.set(row.apn, row.id);
   }
 
-  /* Tier 2, once for the chunk. */
-  const hashes = [...new Set(parsed.map((entry) => entry.hash))];
+  /* Tier 2, once for the chunk — address-bearing references only. */
+  const hashes = [
+    ...new Set(parsed.filter((entry) => entry.hasAddress).map((entry) => entry.hash)),
+  ];
   const byHash = new Map<string, string>();
   {
     const rows = await tx
@@ -436,7 +491,7 @@ export async function resolveProperties(
     const apn = entry.ref.apn;
     const hit =
       (apn !== null && apn !== '' ? byApn.get(apn) : undefined) ??
-      byHash.get(entry.hash.toString('hex'));
+      (entry.hasAddress ? byHash.get(entry.hash.toString('hex')) : undefined);
     if (hit !== undefined) {
       byIndex.set(index, hit);
       matched += 1;
@@ -461,7 +516,9 @@ export async function resolveProperties(
     if (result.created) created += 1;
     else matched += 1;
 
-    byHash.set(entry.hash.toString('hex'), result.propertyId);
+    /* Only address-bearing rows go into the tier-2 map, so the intra-chunk shortcut cannot do
+       what the tier-2 query is no longer allowed to. */
+    if (entry.hasAddress) byHash.set(entry.hash.toString('hex'), result.propertyId);
     if (apn !== null && apn !== '') byApn.set(apn, result.propertyId);
   }
 
