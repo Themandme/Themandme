@@ -11,10 +11,11 @@
     "@magnolia/db": "workspace:*",
     "drizzle-orm": "^0.45.2",
     "fastify": "^5.2.1",
-    "ioredis": "^6.0.0"
+    "ioredis": "^6.0.0",
+    "tsx": "^4.23.12"
   },
   "scripts": {
-    "start": "node --experimental-strip-types --env-file-if-exists=../../.env src/main.ts",
+    "start": "tsx --env-file-if-exists=../../.env src/main.ts",
     "dev": "tsx watch --env-file-if-exists=../../.env src/main.ts"
   }
 }

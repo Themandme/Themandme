@@ -75,7 +75,7 @@ services:
       args:
         GIT_SHA: ${GIT_SHA:-dev}
     container_name: magnolia-api
-    command: ['node', '--experimental-strip-types', 'apps/api/src/main.ts']
+    command: ['pnpm', '--filter', '@magnolia/api', 'start']
     env_file: [.env]
     environment:
       # Container-network hostnames override whatever .env says for a host-based loop.
@@ -112,7 +112,7 @@ services:
       args:
         GIT_SHA: ${GIT_SHA:-dev}
     container_name: magnolia-worker
-    command: ['node', '--experimental-strip-types', 'apps/worker/src/main.ts']
+    command: ['pnpm', '--filter', '@magnolia/worker', 'start']
     env_file: [.env]
     environment:
       DATABASE_URL: postgres://magnolia:magnolia@postgres:5432/magnolia

@@ -3,7 +3,7 @@
 Spec §4.5 marks every data source `[VERIFY]`, and BUILD_PLAN M2's Definition of Done requires
 each endpoint be verified **before** its adapter is written. This is that record.
 
-**Verified: 2026-08-11**, `baltimore.tax_sale` added **2026-08-12**. Re-verify before M2 adapters
+**Verified: 2026-08-11**, `baltimore.tax_sale` added **2026-08-12**, `baltimore.vacant_lots` and the `code_violations` search added **2026-08-12**. Re-verify before M2 adapters
 go live. Endpoints move and datasets go quiet without announcement — this document records the
 state on specific days, and an undated "verified" claim is worth very little.
 
@@ -143,6 +143,85 @@ things currently documented as blocked: spec §4.3's owner-name confirming attri
 resolution, and person resolution generally. It does **not** unblock them — a 2021 owner name is
 exactly the kind of stale personal data that must not drive outreach — but it does mean the
 obstacle is this dataset's age, not the absence of the field city-wide.
+
+---
+
+## Found 2026-08-12 — `Housing/Accela_DHCD` layer 8, Vacant Lots
+
+Found while searching for `code_violations`. It supplies **two** things this document had
+recorded as unavailable.
+
+- **Endpoint:** `https://egisdata.baltimorecity.gov/egis/rest/services/Housing/Accela_DHCD/MapServer/8`
+- **Count:** `where=1=1` → `{"count":20147}` · geometry `esriGeometryPoint`
+- **Fields:** `BLOCKLOT`, `NO_IMPRV`, `FULLADDR`, `OWNER_1`, `OWNER_ABBR`, `NEIGHBOR`, `RESPAGCY`
+
+Sample rows (real, 2026-08-12):
+
+```
+BLOCKLOT "0002 041"  NO_IMPRV "Y"  FULLADDR "1825 N PAYSON ST"  OWNER_1 "HARBOR PIER HOMES, LLC"
+BLOCKLOT "0003 067A" NO_IMPRV "Y"  FULLADDR "1827 MCKEAN AVE"   OWNER_1 "KEYS, HERBERT J"
+```
+
+### Why it matters
+
+1. **`land.vacant_lot` becomes derivable.** `NO_IMPRV = 'Y'` on all 20,147 rows is a direct
+   no-structure indicator. It is needed because **SDAT cannot supply this signal** — measured on
+   the live load: `land.use_code` has only ten values (`Residential`, `Commercial`,
+   `Exempt`, `Apartments`, `Industrial`, …), none meaning vacant, and `property.building_sqft`
+   has a **minimum of 1**, so "no structure" is not representable there either. An earlier note
+   in this project assumed SDAT covered this; it does not.
+
+2. **`OWNER_1` is an owner NAME, populated on all 20,147 rows** (`where OWNER_1 IS NOT NULL` →
+   `{"count":20147}`). This is the first owner name found on any live Baltimore source. Three
+   things documented as blocked on its absence are affected:
+   - `owner.entity` (§4.4) — `"HARBOR PIER HOMES, LLC"` vs `"KEYS, HERBERT J"` is exactly the
+     entity-versus-person distinction that signal needs;
+   - person resolution generally;
+   - the owner-name confirming attribute in §4.3 tier 3, currently unimplemented for want of a
+     source (see `packages/db/DIVERGENCES.md`).
+
+   Scope caveat: it covers **vacant lots only**, not the whole parcel universe, so it does not
+   make owner names generally available.
+
+### Recency is NOT established
+
+**There is no date field on this layer**, so the count-query probe this document mandates cannot
+be applied — the same limitation as `baltimore.tax_sale`. The service is backed by Accela, the
+city's live permitting and enforcement system, and 20,147 is plausible against widely reported
+Baltimore vacant-lot counts, but **neither of those is a measurement**.
+
+Structure is not recency — that error was made once already on `baltimore.receivership` and
+retracted below. This layer therefore stays **unverified for freshness**, and an adapter should
+not be written against it until a recency probe is found (a `RESPAGCY`/`OBJECTID` high-water
+comparison across two dated fetches would do it, since ingestion records `observed_at` itself).
+
+### Values needing normalization
+
+`OWNER_1` and `NEIGHBOR` are fixed-width padded (`"KEYS, HERBERT J                  "`).
+`OWNER_ABBR` is null throughout, and `RESPAGCY` is `"  "` — both look unused.
+
+---
+
+## `baltimore.code_violations` — searched 2026-08-12, still not found
+
+Searched exhaustively rather than casually, since this is the highest-value remaining gap:
+
+| Where                                                                                                                                   | Result                                                                 |
+| --------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------- |
+| All ArcGIS folders (`Housing`, `CityView` (75 services), `DOF`, `311`, `Transportation`, `Utilities`, `BaseMaps`, `PABC_Assets`, `911`) | no code-enforcement service                                            |
+| `Housing/Accela_DHCD` — the city's enforcement platform                                                                                 | reference geography only (zoning, districts, boundaries); no citations |
+| `data.baltimorecity.gov` Socrata catalog API                                                                                            | **HTTP 404 — not a Socrata domain**                                    |
+| ArcGIS Hub, `baltimore code enforcement violation`                                                                                      | only other jurisdictions (Peachtree Corners, Zebulon, Fayetteville)    |
+
+**The seed is wrong about this source too.** `baltimore.code_violations` is seeded
+`access_method: socrata`, `base_url: https://data.baltimorecity.gov` — but that host does not
+run a Socrata API. The same guess appears on `baltimore.311`. This is the third instance of a
+seeded endpoint that nobody had called (after `tax_sale` and the SDAT MapServer/host).
+
+`code.violation_open` (§4.4) therefore still has **no source**, and absence of the signal is not
+evidence a property has no open violations. **Operator action:** ask Baltimore City open data
+directly where code-enforcement citations are published — this is now a question for a human,
+not another search.
 
 ---
 

@@ -4,10 +4,16 @@
 # packages/ is a dependency of both, so separate images would duplicate the build and then have
 # to be kept in step. Which process runs is a matter of CMD, not of what was built.
 #
-# TypeScript is NOT compiled to JavaScript here. The workspace uses `"exports": "./src/index.ts"`
-# throughout and is run under Node's native type stripping, so a build step would mean adding
-# per-package tsconfig outputs and rewriting every workspace export — real work with no runtime
-# benefit at this stage. `tsc` still runs in CI as a typechecker, which is what it is for here.
+# TypeScript is NOT compiled to JavaScript here; it runs under `tsx`. `tsc` still runs in CI as a
+# typechecker, which is what it is for.
+#
+# `tsx` specifically, NOT `node --experimental-strip-types`. The workspace uses NodeNext `.js`
+# import specifiers (`./ingest/ingest-worker.js` resolving to a `.ts` file), which is what tsc
+# requires — and Node's native type stripping does not rewrite that specifier back to `.ts`, so
+# it dies with ERR_MODULE_NOT_FOUND on the first relative import. tsx resolves it. This was found
+# by running the container command rather than reading it.
+#
+# tsx is therefore a real dependency of both apps, not dev tooling.
 
 # ─── deps ────────────────────────────────────────────────────────────────────────────────
 # Separate stage so a source-only change does not re-resolve the dependency tree.
@@ -70,4 +76,4 @@ ENV GIT_SHA=$GIT_SHA
 ENTRYPOINT ["/usr/bin/tini", "--"]
 
 # Default to the API; docker-compose overrides this for the worker.
-CMD ["node", "--experimental-strip-types", "apps/api/src/main.ts"]
+CMD ["pnpm", "--filter", "@magnolia/api", "start"]
