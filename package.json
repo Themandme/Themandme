@@ -29,7 +29,8 @@
     "start:worker": "pnpm --filter @magnolia/worker start",
     "stack:up": "docker compose --profile app up -d --build",
     "stack:down": "docker compose --profile app down",
-    "stack:logs": "docker compose --profile app logs -f api worker"
+    "stack:logs": "docker compose --profile app logs -f api worker",
+    "ingest:resume": "pnpm --filter @magnolia/worker ingest:resume"
   },
   "pnpm": {
     "onlyBuiltDependencies": [

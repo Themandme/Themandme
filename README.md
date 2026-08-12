@@ -124,8 +124,29 @@ in-flight ingest jobs, then closes the pool.
 
 **Do not wrap them in `npx`.** `npx` does not forward SIGTERM: signalling it kills the wrapper
 and leaves the Node process orphaned, still holding queue locks. Observed directly while testing
-this. `pnpm start:*` and the container `CMD` both exec `node` so the signal lands on the right
-process; the image also uses tini as an init for the same reason.
+this. The image uses tini as an init and exec-form CMD so the signal reaches the real process.
+
+Both `dev` and `start` run under **`tsx`**, not `node --experimental-strip-types`. The workspace
+uses NodeNext `.js` import specifiers that resolve to `.ts` files — required by `tsc` — and
+Node's native type stripping does not rewrite that specifier, so it fails with
+`ERR_MODULE_NOT_FOUND` on the first relative import. `tsc` still runs in CI as the typechecker.
+
+### Resuming a partial load
+
+```bash
+pnpm ingest:resume md.sdat_parcel_points
+```
+
+Runs phase two alone — normalize whatever is banked but not yet normalized — without re-fetching.
+`ingestSource` always fetches first, which for SDAT is eight minutes of paging a state endpoint
+to re-learn what is already in `raw_records`.
+
+It retries with backoff and a fresh connection pool per attempt, because over the tens of minutes
+a full-market load takes, a database restart is a normal event rather than an exceptional one —
+that happened three times during the SDAT load here, and each time the committed work survived
+and only the process died. The retry is safe because the pipeline is idempotent (invariant 7):
+an already-normalized record is not in the pending set. It stops if a pass makes no progress,
+since that is a failure retrying will not fix.
 
 ### Measured throughput
 

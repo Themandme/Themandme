@@ -23,6 +23,7 @@
   },
   "scripts": {
     "start": "tsx --env-file-if-exists=../../.env src/main.ts",
-    "dev": "tsx watch --env-file-if-exists=../../.env src/main.ts"
+    "dev": "tsx watch --env-file-if-exists=../../.env src/main.ts",
+    "ingest:resume": "tsx --env-file-if-exists=../../.env src/resume.ts"
   }
 }
