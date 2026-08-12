@@ -12,6 +12,7 @@
     "@magnolia/db": "workspace:*",
     "@magnolia/providers": "workspace:*",
     "bullmq": "^6.0.11",
+    "csv-parse": "^7.0.2",
     "drizzle-orm": "^0.45.2",
     "ioredis": "^6.0.0",
     "uuid": "^14.0.1"

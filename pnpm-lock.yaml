@@ -71,6 +71,9 @@ importers:
       bullmq:
         specifier: ^6.0.11
         version: 6.0.11(ioredis@6.0.0)
+      csv-parse:
+        specifier: ^7.0.2
+        version: 7.0.2
       drizzle-orm:
         specifier: ^0.45.2
         version: 0.45.2(postgres@3.4.9)
@@ -1093,6 +1096,9 @@ packages:
   cross-spawn@7.0.6:
     resolution: {integrity: sha512-uV2QOWP2nWzsy2aMp8aRibhi9dlzF5Hgh5SHaB9OiTGEyDTiJJyx0uy51QXdyWbtAHNua4XJzUKca3OzKUd3vA==}
     engines: {node: '>= 8'}
+
+  csv-parse@7.0.2:
+    resolution: {integrity: sha512-uKZghv9UmPkMVLYy//KZ9HFAIJsl7wkhoEdIL0+rhuSY9pZQlhaeGEDPIe+/w7eh81MOql8Q/9+inAGWG6ZHYA==}
 
   debug@4.4.3:
     resolution: {integrity: sha512-RGwwWnwQvkVfavKVt22FGLw+xYSdzARwm0ru6DhTVA3umU5hZc28V3kO4stgYryrTlLpuvgI9GiijltAjNbcqA==}
@@ -2396,6 +2402,8 @@ snapshots:
       path-key: 3.1.1
       shebang-command: 2.0.0
       which: 2.0.2
+
+  csv-parse@7.0.2: {}
 
   debug@4.4.3:
     dependencies:

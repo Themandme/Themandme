@@ -34,3 +34,12 @@ export {
   type SchedulerOptions,
   type SweepOutcome,
 } from './scheduler.js';
+
+export {
+  ingestManualUpload,
+  ManualUploadError,
+  parseCsv,
+  TRANSCRIPTION_CONFIDENCE_FACTOR,
+  type ManualProvenance,
+  type ManualUploadOptions,
+} from './ingest/manual-upload.js';

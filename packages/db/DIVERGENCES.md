@@ -292,6 +292,63 @@ alone, because dozens of permits share an issue date and ties would reorder betw
 
 ---
 
+### Manual upload has two provenance modes, not one
+
+BUILD_PLAN M2.6 specifies the manual-upload path as "CSV upload → raw record → same normalizer,
+provenance tier `human`". Spec §4.5 says the same of ToS-restricted sources: reachable "only by
+manual operator lookup recorded as a human-tier fact".
+
+**Here:** the caller must choose `provenance: 'operator' | 'transcribed'`, and there is no
+default.
+
+#### Why one mode is not enough
+
+§4.2 ranks `human` as the **highest** authority — literally `human: 0` in
+`packages/core/src/facts/conflicts.ts`, above `official_record`. A fact recorded against
+`magnolia.human` therefore beats every automated source, permanently.
+
+That is exactly right for what §4.5 describes: an operator opens Case Search, reads one docket,
+and records what they saw. A person who looked at the thing should outrank a feed.
+
+It is badly wrong for the other case the same path invites. Baltimore's live tax-sale list is an
+annual **document**, so loading it means transcribing thousands of rows. At tier `human`, every
+one of those rows would outrank SDAT forever, and a single transcription typo could never be
+corrected by any automated source — the correction would itself have to be manual, in
+perpetuity. One mistyped house number becomes permanent.
+
+So:
+
+| Mode          | Facts recorded against           | §4.2 authority                 | For                                        |
+| ------------- | -------------------------------- | ------------------------------ | ------------------------------------------ |
+| `operator`    | `magnolia.human`                 | highest — overrides everything | §4.5 manual lookup; operator corrections   |
+| `transcribed` | the originating source's own row | that source's tier             | bulk transcription of a published document |
+
+`transcribed` also multiplies each fact's confidence by `TRANSCRIPTION_CONFIDENCE_FACTOR` (0.9).
+The tier still asserts "this is an official record", which is true; the confidence says we are
+slightly less sure it was copied correctly, which is also true. Transcription is lossy in a way
+an API response is not.
+
+There is **no default** because choosing wrong is silent and the damage surfaces much later —
+the same reason `resolveProperty` takes its thresholds as required options.
+
+The originating dataset stays recoverable in both modes: it is written to `source_fetches`
+`storage_uri` alongside the operator and origin, and into every payload under a namespaced
+`__upload` envelope. Without that, a `magnolia.human` fact could not tell §13.3 replay which
+document the operator was reading.
+
+#### `scraping_allowed` is deliberately NOT required here
+
+This looks like a hole and is the opposite. §4.5 keeps `md.case_search` and `md.land_records`
+non-scrapable **and**, in the same sentence, says they are reachable by manual operator lookup.
+Requiring `scraping_allowed` on this path would forbid the one route the spec permits.
+
+The gate is an operator instead: `uploadedBy` is mandatory and non-blank, so every fact arriving
+this way names the person who supplied it. Automated access remains refused by
+`registry.requireRunnable` and by the scheduler; both have tests asserting these two sources can
+never be fetched or enqueued.
+
+---
+
 ## Not divergences, but worth knowing
 
 **Constraint and index names.** Drizzle auto-names constraints
