@@ -34,6 +34,12 @@ export {
 } from './adapters/baltimore-vbn.js';
 
 export {
+  createBaltimorePermitsAdapter,
+  normalizeBuildingPermit,
+  PERMIT_FIELDS,
+} from './adapters/baltimore-permits.js';
+
+export {
   createAdapterRegistry,
   SourceDisabledError,
   SourceNotRegisteredError,

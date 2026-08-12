@@ -1,0 +1,110 @@
+{
+  "capturedAt": "2026-08-12",
+  "features": [
+    {
+      "attributes": {
+        "Address": "2920 GREENMOUNT AVE",
+        "BLOCKLOT": "3855 002A",
+        "CaseNumber": "BCCM-25-000528",
+        "Cost": 5000,
+        "Council_District": 14,
+        "Description": "PLEASE AMEND THIS PERMIT APPLICATION TO ADD YOUR LICENSED GC.\r\n\r\nEXTERIOR ALTERATION, to include install 100 linear feet of new 6 foot tall non-electrical, non-barbed wired, fence on entire southern property line.  As per plans as per code.",
+        "ExistingUse": "Arts Studio",
+        "ExpirationDate": 1798502400000,
+        "IsPermitModification": 0,
+        "IssuedDate": 1782950400000,
+        "Neighborhood": "Abell",
+        "PermitName": "Greenmount fence",
+        "ProposedUse": "Arts Studio"
+      },
+      "geometry": {
+        "x": -76.60972273237695,
+        "y": 39.32389255441527
+      }
+    },
+    {
+      "attributes": {
+        "Address": "406 S CONKLING ST",
+        "BLOCKLOT": "6314 045",
+        "CaseNumber": "BCCM-25-000877",
+        "Cost": 3000,
+        "Council_District": 1,
+        "Description": "EXTERIOR ALTERATION TO INCLUDE ONLY Replace rear deck and stair at 406 S Conkling Street, AS PER PLANS AS PER CODE",
+        "ExistingUse": "Mixed Use (Commerical)",
+        "ExpirationDate": 1800144000000,
+        "IsPermitModification": 0,
+        "IssuedDate": 1784592000000,
+        "Neighborhood": "Highlandtown",
+        "PermitName": "406 S Conkling Street - Rear Deck",
+        "ProposedUse": "Mixed Use (Commerical)"
+      },
+      "geometry": {
+        "x": -76.56753208873516,
+        "y": 39.28734574228092
+      }
+    },
+    {
+      "attributes": {
+        "Address": "1501 E MONUMENT ST",
+        "BLOCKLOT": "1290 021",
+        "CaseNumber": "BCCM-25-001647",
+        "Cost": 2600000,
+        "Council_District": 12,
+        "Description": "********* PARENT PERMIT BCCM-25-001028  *******    SCOPE OF WORK:     ------- SITE WORK -------    hardscaping and landscaping related BCCM-25-001028      ******* loading dock under different permit BCCM-25-001028 ***********    AS PER PLANS AND AS PER CODE.",
+        "ExistingUse": "Educational Facility: Post-Secondary",
+        "ExpirationDate": 1847577600000,
+        "IsPermitModification": 0,
+        "IssuedDate": 1784505600000,
+        "Neighborhood": "Dunbar-Broadway",
+        "PermitName": "1501 East Monument Street (Parcel 4 of JH LSB Development)",
+        "ProposedUse": "Educational Facility: Post-Secondary"
+      },
+      "geometry": {
+        "x": -76.59672440326106,
+        "y": 39.29772988361313
+      }
+    },
+    {
+      "attributes": {
+        "Address": "100 W COLD SPRING LN",
+        "BLOCKLOT": "4953 020",
+        "CaseNumber": "BCCM-25-001650",
+        "Cost": 22000,
+        "Council_District": 6,
+        "Description": "Revision of Fire Alarm Replacement for Permit COM2023-03182, Plan #2023-2615 as per plans as per code.",
+        "ExistingUse": "Educational",
+        "ExpirationDate": 1801526400000,
+        "IsPermitModification": 0,
+        "IssuedDate": 1785974400000,
+        "Neighborhood": "Loyola/Notre Dame",
+        "PermitName": "15121 Loyola Newman FA Revision",
+        "ProposedUse": "Educational"
+      },
+      "geometry": {
+        "x": -76.62544238628577,
+        "y": 39.346296711388504
+      }
+    },
+    {
+      "attributes": {
+        "Address": "3100 GREENMOUNT AVE",
+        "BLOCKLOT": "3881 010",
+        "CaseNumber": "BCCM-25-001801",
+        "Cost": 9984,
+        "Council_District": 14,
+        "Description": "Install wet chemical Fire Suppression System on kitchen Hood",
+        "ExistingUse": "Vacant House/Building/Structure",
+        "ExpirationDate": 1800921600000,
+        "IsPermitModification": 0,
+        "IssuedDate": 1785369600000,
+        "Neighborhood": "Abell",
+        "PermitName": "Thai Restaurant",
+        "ProposedUse": "Carry-Out Food Shop"
+      },
+      "geometry": {
+        "x": -76.60970784977893,
+        "y": 39.32625661472337
+      }
+    }
+  ]
+}

@@ -314,6 +314,45 @@ describe('idempotency and superseding (invariant 7, spec §4.1 rule 5)', () => {
     expect(current[0]?.value).toBe(1925);
   });
 
+  it('refuses to let a LATER-ARRIVING OLDER observation become current', async () => {
+    /*
+     * Supersede is on observation time, not arrival time. This is invisible for a source that
+     * emits one record per property (VBN), and decisive for one that emits many in service page
+     * order (permits, code violations, 311): ingesting a 2019 permit after a 2026 one must not
+     * leave 2019 standing as the property's current permit fact.
+     */
+    const newer = await recordFact(db, registry, {
+      ...(await draft()),
+      value: 1925,
+      observedAt: new Date('2026-03-01T00:00:00Z'),
+    });
+    const older = await recordFact(db, registry, {
+      ...(await draft()),
+      value: 1901,
+      observedAt: new Date('2019-01-01T00:00:00Z'),
+    });
+
+    expect(older.created, 'an older observation must not be recorded as current').toBe(false);
+    expect(older.id).toBe(newer.id);
+
+    const current = await currentFactsFor(db, 'property', PROPERTY_ID, 'property.year_built');
+    expect(current).toHaveLength(1);
+    expect(current[0]?.value, 'the newer observation stays current').toBe(1925);
+  });
+
+  it('still supersedes on an EQUAL timestamp — a restated value is a correction', async () => {
+    /* Equal observedAt with a different value means the source restated the same instant. The
+       later statement is the correction and must win, so the guard is strictly-older, not
+       older-or-equal. */
+    const first = await recordFact(db, registry, await draft());
+    const corrected = await recordFact(db, registry, { ...(await draft()), value: 1922 });
+
+    expect(corrected.created).toBe(true);
+    expect(corrected.supersededFactId).toBe(first.id);
+    const current = await currentFactsFor(db, 'property', PROPERTY_ID, 'property.year_built');
+    expect(current[0]?.value).toBe(1922);
+  });
+
   it('allows two current facts on one predicate from DIFFERENT sources', async () => {
     /* This is what makes conflict detection possible at all (§4.1 rule 6): disagreement is
        between sources. The one-current-per-source index must not prevent it. */

@@ -167,6 +167,29 @@ export async function recordFact(
     if (identical) {
       return { id: existing.id, created: false, supersededFactId: null };
     }
+
+    /*
+     * Supersede on OBSERVATION time, not arrival time.
+     *
+     * Spec §4.1 rule 5 says the newest fact from a source supersedes the older one. Comparing
+     * only what is already current makes that rule depend on the order records happen to be
+     * normalized in, which for many sources is arbitrary.
+     *
+     * It matters as soon as a source emits several records per property. `baltimore.vbn` emits
+     * roughly one notice per property, so the bug is invisible there — but building permits,
+     * code violations and 311 requests all emit many, in whatever order the service pages them.
+     * Without this guard, ingesting a 2019 permit after a 2026 one leaves the 2019 date standing
+     * as the property's current permit fact, and the read model then reports a rehab that
+     * happened seven years ago as the latest.
+     *
+     * An older observation is not wrong, it is just not the current one, so it is dropped rather
+     * than raised: the newer fact it would have replaced is already recorded and already correct.
+     * Equal timestamps still supersede, because a source re-stating the same instant with a
+     * different value is a correction and the later statement wins.
+     */
+    if (draft.observedAt.getTime() < existing.observedAt.getTime()) {
+      return { id: existing.id, created: false, supersededFactId: null };
+    }
   }
 
   const id = uuidv7();

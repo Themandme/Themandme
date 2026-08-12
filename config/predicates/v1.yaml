@@ -254,6 +254,56 @@ predicates:
     value_schema:
       type: boolean
 
+  # ── Permits (added 2026-08-12) ────────────────────────────────────────────────────────
+  #
+  # Spec §4.5 lists `baltimore.permits` as a V1 source "(rehab activity, builder
+  # identification)", but §4.4's signal registry defines no permit signal and §4.1's predicate
+  # list names no permit predicate. So the source had nowhere to land: an adapter would have
+  # produced facts that `recordFact` rejects, because the FK on `facts.predicate` makes an
+  # unregistered predicate a database error.
+  #
+  # These three close that gap on the ingestion side. The SIGNAL is deliberately not added here
+  # — §4.4 signals are derived from facts by pure functions in packages/core/src/signals, which
+  # is M3 work. Recording the facts now is what lets M3 write that function against real data
+  # instead of against an assumption. See packages/db/DIVERGENCES.md.
+  #
+  # All three describe "the most recent permit", which is only well defined because `recordFact`
+  # supersedes on observation time: each permit record is normalized with observed_at =
+  # IssuedDate, so whichever is newest wins regardless of the order the service pages them.
+  - key: permit.last_issued_at
+    subject: property
+    volatility: volatile
+    default_ttl_days: 30
+    description: Issue date of the most recent building permit.
+    value_schema:
+      type: string
+      format: date
+
+  - key: permit.last_cost_cents
+    subject: property
+    volatility: volatile
+    default_ttl_days: 30
+    # Declared job cost, which is what the applicant stated, not an appraisal. Useful as a
+    # magnitude band (a $500 water-heater permit and a $200k gut rehab mean opposite things
+    # about distress), not as a precise number — hence the wide tolerance.
+    tolerance: 100000 # $1,000
+    description: Declared cost of the most recent building permit, in integer cents.
+    value_schema:
+      type: integer
+      minimum: 0
+
+  - key: permit.last_description
+    subject: property
+    volatility: volatile
+    default_ttl_days: 30
+    # Free text from the permit application. Kept because "rehab activity" per §4.5 cannot be
+    # read off cost alone — a demolition and a kitchen remodel can carry the same figure.
+    description: Free-text scope of the most recent building permit, as filed.
+    value_schema:
+      type: string
+      minLength: 1
+      maxLength: 2000
+
   # ── Conversation-derived (spec §10.3) ─────────────────────────────────────────────────
   - key: seller.stated_price
     subject: property

@@ -29,6 +29,16 @@ export interface ArcGisQuery {
   where?: string;
   outFields?: string;
   returnGeometry?: boolean;
+  /**
+   * Server-side sort, e.g. `'IssuedDate'` or `'OBJECTID DESC'`.
+   *
+   * Not cosmetic. `queryAll` pages with `resultOffset`, and an offset walk over an *unordered*
+   * result set is undefined — the service is free to return rows in a different order on each
+   * request, which silently duplicates some records across pages and skips others. Supplying a
+   * stable sort is what makes the walk total. Layers whose natural key is `OBJECTID` get that
+   * ordering by default below.
+   */
+  orderByFields?: string;
 }
 
 interface ArcGisFeature {
@@ -114,6 +124,10 @@ function buildUrl(layer: ArcGisLayer, query: ArcGisQuery, offset: number): strin
     outFields: query.outFields ?? '*',
     returnGeometry: String(query.returnGeometry ?? true),
     outSR: '4326',
+    /* Default to OBJECTID so an offset walk is always over a stable order. Every ArcGIS layer
+       has one and it is unique, which is exactly what offset pagination needs; without it the
+       service may reorder between requests and the walk both duplicates and drops rows. */
+    orderByFields: query.orderByFields ?? 'OBJECTID',
     resultOffset: String(offset),
     resultRecordCount: String(layer.pageSize),
     f: 'json',

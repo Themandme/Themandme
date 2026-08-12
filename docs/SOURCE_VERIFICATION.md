@@ -156,14 +156,106 @@ normalizers.
 | ----- | -------------------------------- | ----------------------------------------------- |
 | 0     | Completed City Demo              | `DateUpdate`, `DateStarted`, `DateDemoFinished` |
 | 2     | Rehabs of Vacant Buildings       | `DateIssue`                                     |
-| 4     | Receivership - Filed and Open    | `DateFiled`, `ReceiverAppointed`, `DateAuction` |
-| 5     | Receivership - Settled           | `SoldAtAuction`, `Settlement_DateSaleRatified`  |
 | 7     | Open Bid List - Vacants to Value | no date fields                                  |
 | 9     | Open Work Orders                 | `DateCreate`, `DateFinish`                      |
 | 12    | Real Property                    | no date fields                                  |
 
-**Layers 4 and 5 fill a gap in the spec.** §4.4 defines a `code.receivership` signal, but
-§4.5's source table names nothing that supplies it. These layers do.
+Layers 4 and 5 were in this table until their recency was measured on 2026-08-12. They are dead;
+see the correction below.
+
+---
+
+## Correction — 2026-08-12
+
+### `baltimore.receivership` ⚠️ dead since 2021 — and a claim retracted
+
+**This document previously stated: "Layers 4 and 5 fill a gap in the spec. §4.4 defines a
+`code.receivership` signal, but §4.5's source table names nothing that supplies it. These layers
+do." That was wrong, and it is retracted.**
+
+The claim was made from **structure alone** — the layers have exactly the right fields
+(`DateFiled`, `ReceiverAppointed`, `DateAuction`, `SoldAtAuction`, `CaseNumber`), so they looked
+like the answer. Recency was listed as "not yet measured" in the same breath, and the conclusion
+was drawn anyway. Measuring it shows the layers stopped being maintained in 2021.
+
+**Layer 4 — Receivership, Filed and Open** (total `{"count":767}`):
+
+| `where DateFiled >= timestamp '…'` | count |
+| ---------------------------------- | ----- |
+| `2019-01-01`                       | 474   |
+| `2020-01-01`                       | 303   |
+| `2021-01-01`                       | 234   |
+| `2022-01-01`                       | **9** |
+| `2023-01-01`                       | **1** |
+| `2025-01-01`                       | **0** |
+
+**Layer 5 — Receivership, Settled** (total `{"count":1965}`):
+
+| `where SoldAtAuction >= timestamp '…'` | count |
+| -------------------------------------- | ----- |
+| `2019-01-01`                           | 377   |
+| `2020-01-01`                           | 213   |
+| `2021-01-01`                           | 88    |
+| `2022-01-01`                           | **5** |
+| `2023-01-01`                           | **0** |
+
+All three remaining date fields on layer 4 were checked in case `DateFiled` was simply the wrong
+one to probe — `ReceiverAppointed`, `DateAuction` and `SoldAtAuction` each return `{"count":0}`
+for `>= 2024-01-01`. The layers are dead, not mis-probed.
+
+**So `code.receivership` has no source.** The §4.5 gap this document claimed was closed is open.
+Do not write the adapter. Baltimore's receivership program is active in reality — this is a
+publication that stopped, like Foreclosure Filings, not a program that ended.
+
+**Treat the absent signal the way `phifa.gate` is treated:** absence of `code.receivership` is
+**not** evidence that a property is not in receivership. Any M3 signal logic or M4 gate that
+reads it must not interpret "inactive" as "confirmed clear".
+
+**The lesson, since this is the second time it has bitten:** structure is not recency. A layer
+with perfect fields and no recent rows is worth exactly as much as no layer at all, and it is
+more dangerous, because it looks like coverage. Nothing moves out of "recency not yet measured"
+on the strength of its schema again.
+
+### `md.parcel_boundaries` ✅ verified — and it unblocks parcel adjacency
+
+- **Endpoint:** `https://mdgeodata.md.gov/imap/rest/services/PlanningCadastre/MD_ParcelBoundaries/MapServer/0`
+- **Geometry:** `esriGeometryPolygon` · **maxRecordCount:** 1000 · **fields:** 117
+- **Statewide:** `{"count":2288725}` · **Baltimore City (`JURSCODE='BACI'`):** `{"count":223986}`
+
+| Probe                                        | Count       |
+| -------------------------------------------- | ----------- |
+| `JURSCODE='BACI'`                            | 223,986     |
+| `… AND CHAR_LENGTH(ACCTID)>8` (real parcels) | **222,703** |
+| `… AND ACCTID='ROW'`                         | 1,018       |
+| `… AND ACCTID='Water'`                       | 257         |
+| `… AND ACCTID IS NULL`                       | 8           |
+
+The four subsets sum exactly to the total, so the filter is complete rather than approximate.
+
+**`ACCTID` is the same key as SDAT parcel points**, so boundaries join to the points already
+ingested and to `properties.apn` — entity resolution tier 1 works across both without a new
+match path.
+
+Polygon geometry is what **M2.5 parcel adjacency** (`ST_Touches`) needs. That item was blocked
+solely on this verification; it is now unblocked.
+
+#### Three traps an adapter must handle
+
+1. **`ROW` and `Water` polygons are not parcels.** They are the _first_ rows the service returns
+   for Baltimore, so a naive first-page fixture capture would consist entirely of them. 1,283
+   rows must be filtered, or entity resolution will be handed `"ROW"` as an APN.
+2. **`POLYDATE` is a `String(7)`, not a date** — the value is `"2024DEC"`, a `YYYYMMM` code.
+   Comparing it with `timestamp '…'` returns HTTP 400/500, which is how this was caught. Same
+   family as the epoch-conversion error in the method note above: **a field named like a date is
+   not a date.** `SDATDATE` and `MDPVDATE` share the shape.
+3. **223 pages at `maxRecordCount` 1000.** Statewide it is 2,289 pages. Pagination is not
+   optional here, and the Baltimore filter must be pushed to the server, not applied client-side.
+
+**Vintage:** `POLYDATE` is uniformly `"2024DEC"` across every Baltimore row
+(`… AND POLYDATE<>'2024DEC'` → `{"count":0}`), with `MDPVDATE` `"2025FEB"`. Geometry is about 20
+months old at time of writing. For parcel boundaries that is acceptable — lot lines change on the
+timescale of subdivisions, not days — but it is a vintage, not a live feed, and the refresh cron
+seeded for this source (quarterly) matches that reality.
 
 ---
 
@@ -180,8 +272,9 @@ Nothing below has been confirmed. Do not write an adapter against any of it firs
   annually. A consolidated `Customer_Service_Request311_2021_Present` layer appeared in search
   results but **404'd** when fetched.
 - **`baltimore.open_bid`** (layer 7), **`baltimore.real_property`** (layer 12) — structure seen,
-  no recency measured; neither exposes a date field, so recency needs a different probe.
-- **`md.parcel_boundaries`**, **`md.sdat_entities`** — not checked.
+  no recency measured; neither exposes a date field, so recency needs a different probe. Per the
+  receivership correction above, structure alone does **not** promote these out of this list.
+- **`md.sdat_entities`** — not checked.
 
 ### Host sprawl
 
@@ -225,9 +318,14 @@ A dataset that stops updating still returns HTTP 200 with a well-formed, empty d
 and the source looks healthy while producing nothing. That is precisely the Foreclosure
 Filings failure, and nothing in the current design would have caught it.
 
-**Two of the sixteen seeded sources have now failed this way** — Foreclosure Filings (silent
-since 2020) and Tax Sale (frozen at FY2021). Both feed high-weight signals. That is no longer a
-one-off worth noting; it is the most common failure mode observed in this codebase so far.
+**Three of the sixteen seeded sources have now failed this way** — Foreclosure Filings (silent
+since 2020), Tax Sale (frozen at FY2021) and Receivership (stopped 2021). All three feed signals
+§4.4 defines. That is no longer a one-off worth noting; it is the most common failure mode
+observed in this codebase, and it is the single largest risk to M3's signal coverage.
+
+Set against six sources verified live (VBN, Permits, SDAT parcel points, MD parcel boundaries),
+the working assumption for any unverified source in §4.5 should be that it is **as likely dead as
+alive** until a count query says otherwise.
 
 **Tax Sale is the harder variant.** Foreclosure Filings at least has a date field, so
 `max(facts.observed_at)` would eventually reveal the silence. Tax Sale has **no date field at

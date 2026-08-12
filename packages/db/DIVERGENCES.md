@@ -215,6 +215,83 @@ if a market lacks them rather than resolving at a compiled-in value.
 
 ---
 
+### `recordFact` supersedes on observation time, not arrival time
+
+Spec §4.1 rule 5 says the newest fact from a source supersedes the older one. As implemented,
+"newest" meant _most recently written_ — `recordFact` compared the incoming draft only against
+whatever was currently flagged, and superseded unconditionally.
+
+**Here:** a draft whose `observed_at` is strictly older than the current fact's is dropped.
+
+#### Why
+
+The two readings agree for a source that emits roughly one record per property, which is why
+this survived M1 and M2 slice 1 — `baltimore.vbn` emits one notice per property and
+`md.sdat_parcel_points` one row per parcel.
+
+They diverge as soon as a source emits **many** records per property, in the order the service
+happens to page them. `baltimore.permits` does: a property can carry dozens of permits going
+back decades. Under the old rule, ingesting a 2019 permit after a 2026 one left the 2019 date
+standing as the property's current permit fact, and the read model then reported a seven-year-old
+rehab as the latest activity. `baltimore.code_violations` and `baltimore.311` have the same
+shape and would inherit the same bug.
+
+The fix is what makes predicates like `permit.last_issued_at` well defined at all — "last" is
+otherwise a statement about page order.
+
+#### The boundary is strictly-older, deliberately
+
+Equal timestamps still supersede. A source restating the same instant with a different value is
+issuing a **correction**, and the later statement should win; treating equality as "drop" would
+make corrections unlandable. Both halves are asserted in `fact-ledger.test.ts`.
+
+An older observation is dropped rather than raised as an error: it is not wrong, it is simply
+not current, and the newer fact it would have replaced is already recorded and already correct.
+History is not lost either — the older row is absent only from `is_current`, and a source that
+genuinely needs backfilled history recorded can write it before the newer fact arrives.
+
+---
+
+### `permit.*` predicates added; the permit SIGNAL deliberately not
+
+Spec §4.5 lists `baltimore.permits` as a V1 source, annotated "(rehab activity, builder
+identification)". But **§4.4's signal registry defines no permit signal, and §4.1's predicate
+list names no permit predicate.** The source had nowhere to land: `facts.predicate` is a foreign
+key, so an adapter would have produced facts the database rejects.
+
+Added to `config/predicates/v1.yaml`: `permit.last_issued_at`, `permit.last_cost_cents`,
+`permit.last_description`.
+
+The **signal** is not added. §4.4 signals are derived from facts by pure functions in
+`packages/core/src/signals`, which is M3 work, and inventing the open/close rule and strength
+input now — before any permit facts exist to look at — would be guessing at exactly the kind of
+thing this project measures instead. Recording the facts in M2 is what lets M3 write that
+function against real data.
+
+This is the mirror image of the `code.receivership` gap: there, §4.4 defines a signal that §4.5
+supplies no source for (and the source that appeared to fill it turned out to be dead — see
+`docs/SOURCE_VERIFICATION.md`). Here, §4.5 supplies a source that §4.4 defines no signal for.
+Both suggest §4.4 and §4.5 were written independently and never reconciled.
+
+---
+
+### ArcGIS `queryAll` sorts by `OBJECTID` unless told otherwise
+
+Not a spec divergence — a correctness fix with no spec text either way, recorded because it is
+invisible until it corrupts a load.
+
+`queryAll` pages with `resultOffset`. An offset walk over an **unordered** result set is
+undefined: the service may return rows in a different order per request, which silently
+duplicates some records across pages and drops others. The bug does not throw, and its symptom
+is a record count that is quietly wrong.
+
+`ArcGisQuery` now takes `orderByFields`, defaulting to `OBJECTID` — present and unique on every
+ArcGIS layer, which is exactly what offset pagination needs. Callers supplying their own must
+keep it **total**: `baltimore.permits` orders by `IssuedDate,OBJECTID` rather than `IssuedDate`
+alone, because dozens of permits share an issue date and ties would reorder between pages.
+
+---
+
 ## Not divergences, but worth knowing
 
 **Constraint and index names.** Drizzle auto-names constraints

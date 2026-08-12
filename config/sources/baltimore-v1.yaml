@@ -33,13 +33,20 @@ sources:
   - key: baltimore.tax_sale
     display_name: Tax Lien Certificate Sale Properties
     tier: official_record
-    access_method: socrata
-    base_url: https://data.baltimorecity.gov
+    # Corrected 2026-08-12: this was seeded as `socrata` on data.baltimorecity.gov. It is an
+    # ArcGIS MapServer under the Department of Finance folder — same class of error as the SDAT
+    # MapServer/FeatureServer correction, i.e. a guess about an endpoint nobody had called.
+    access_method: arcgis_rest
+    base_url: https://egisdata.baltimorecity.gov/egis/rest/services/DOF/TaxSale/MapServer
     scraping_allowed: true
     refresh_cron: '0 7 * * 1' # weekly in season, else monthly
     license_note: >-
-      NOT VERIFIED as of 2026-08-11 — endpoint not located this pass. Feeds tax.on_sale_list
-      (signal weight 0.22) and tax.delinquent_balance_cents. Highest-priority gap.
+      LOCATED but UNUSABLE as of 2026-08-12. Three layers, newest FY2021; no date field at all
+      (TaxSale_Year is null throughout), so the count-query recency probe cannot be applied.
+      tax.on_sale_list is a current-state signal and a 2021 snapshot cannot answer it;
+      tax.delinquent_balance_cents has no source field here. Stays enabled: false. The live list
+      is an annual document — route it through the manual_upload path (M2.6), not an adapter.
+      See docs/SOURCE_VERIFICATION.md.
     base_confidence: 0.95
     enabled: false
 
@@ -94,8 +101,14 @@ sources:
     scraping_allowed: true
     refresh_cron: '0 7 * * *'
     license_note: >-
-      Structure confirmed 2026-08-11 (DateFiled, ReceiverAppointed, DateAuction,
-      SoldAtAuction); recency NOT yet measured. Feeds the code.receivership signal.
+      DEAD as of 2026-08-12. Structure is perfect (DateFiled, ReceiverAppointed, DateAuction,
+      SoldAtAuction, CaseNumber) but the publication stopped in 2021: DateFiled >= 2021 = 234,
+      >= 2022 = 9, >= 2023 = 1, >= 2025 = 0. All four date fields on layer 4 return 0 for
+      >= 2024. Layer 5 (Settled) likewise: SoldAtAuction >= 2023 = 0. An earlier note claimed
+      these layers closed the §4.4 code.receivership gap; that was inferred from structure
+      before recency was measured and is retracted. code.receivership has NO source. Absence of
+      the signal is NOT evidence a property is not in receivership. See
+      docs/SOURCE_VERIFICATION.md.
     base_confidence: 0.9
     enabled: false
 
@@ -145,12 +158,19 @@ sources:
     display_name: Statewide parcel polygons
     tier: official_record
     access_method: arcgis_rest
-    base_url: https://geodata.md.gov/imap/rest/services/PlanningCadastre
+    # Host corrected 2026-08-12 to match the verified sibling: geodata.md.gov returned 503.
+    base_url: https://mdgeodata.md.gov/imap/rest/services/PlanningCadastre/MD_ParcelBoundaries/MapServer/0
     scraping_allowed: true
-    refresh_cron: '0 9 3 1,4,7,10 *' # quarterly
+    refresh_cron: '0 9 3 1,4,7,10 *' # quarterly — matches the POLYDATE vintage, not a live feed
     license_note: >-
-      NOT VERIFIED as of 2026-08-11. Note the sibling md.sdat_parcel_points host correction —
-      geodata.md.gov returned 503; mdgeodata.md.gov responded.
+      VERIFIED 2026-08-12. Polygon layer, 222,703 real Baltimore City parcels
+      (JURSCODE='BACI' AND CHAR_LENGTH(ACCTID)>8) out of 223,986 polygons. ACCTID is the same
+      key as md.sdat_parcel_points, so boundaries join to points and to properties.apn.
+      Unblocks parcel adjacency (M2.5, ST_Touches). Adapter MUST: filter ACCTID in
+      ('ROW','Water') and NULL (1,283 rows, and they are the FIRST rows returned); treat
+      POLYDATE as a String(7) YYYYMMM code ('2024DEC'), NOT a date — comparing it to a
+      timestamp returns HTTP 400; paginate (223 pages at maxRecordCount 1000) with the
+      Baltimore filter pushed server-side. See docs/SOURCE_VERIFICATION.md.
     base_confidence: 0.95
     enabled: false
 

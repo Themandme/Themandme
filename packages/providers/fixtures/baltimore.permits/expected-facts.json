@@ -1,0 +1,272 @@
+[
+  {
+    "subject": {
+      "apn": null,
+      "blocklot": "3855 002A",
+      "addressLine1": "2920 GREENMOUNT AVE",
+      "addressLine2": null,
+      "city": "BALTIMORE",
+      "stateCode": "MD",
+      "postalCode": null,
+      "centroid": [-76.60972273237695, 39.32389255441527],
+      "ownerName": null
+    },
+    "predicate": "permit.last_issued_at",
+    "value": "2026-07-02",
+    "epistemic": "fact",
+    "observedAt": "2026-07-02T00:00:00.000Z",
+    "confidence": 0.95
+  },
+  {
+    "subject": {
+      "apn": null,
+      "blocklot": "3855 002A",
+      "addressLine1": "2920 GREENMOUNT AVE",
+      "addressLine2": null,
+      "city": "BALTIMORE",
+      "stateCode": "MD",
+      "postalCode": null,
+      "centroid": [-76.60972273237695, 39.32389255441527],
+      "ownerName": null
+    },
+    "predicate": "permit.last_cost_cents",
+    "value": 500000,
+    "epistemic": "fact",
+    "observedAt": "2026-07-02T00:00:00.000Z",
+    "confidence": 0.9
+  },
+  {
+    "subject": {
+      "apn": null,
+      "blocklot": "3855 002A",
+      "addressLine1": "2920 GREENMOUNT AVE",
+      "addressLine2": null,
+      "city": "BALTIMORE",
+      "stateCode": "MD",
+      "postalCode": null,
+      "centroid": [-76.60972273237695, 39.32389255441527],
+      "ownerName": null
+    },
+    "predicate": "permit.last_description",
+    "value": "PLEASE AMEND THIS PERMIT APPLICATION TO ADD YOUR LICENSED GC. EXTERIOR ALTERATION, to include install 100 linear feet of new 6 foot tall non-electrical, non-barbed wired, fence on entire southern property line. As per plans as per code.",
+    "epistemic": "fact",
+    "observedAt": "2026-07-02T00:00:00.000Z",
+    "confidence": 0.95
+  },
+  {
+    "subject": {
+      "apn": null,
+      "blocklot": "6314 045",
+      "addressLine1": "406 S CONKLING ST",
+      "addressLine2": null,
+      "city": "BALTIMORE",
+      "stateCode": "MD",
+      "postalCode": null,
+      "centroid": [-76.56753208873516, 39.28734574228092],
+      "ownerName": null
+    },
+    "predicate": "permit.last_issued_at",
+    "value": "2026-07-21",
+    "epistemic": "fact",
+    "observedAt": "2026-07-21T00:00:00.000Z",
+    "confidence": 0.95
+  },
+  {
+    "subject": {
+      "apn": null,
+      "blocklot": "6314 045",
+      "addressLine1": "406 S CONKLING ST",
+      "addressLine2": null,
+      "city": "BALTIMORE",
+      "stateCode": "MD",
+      "postalCode": null,
+      "centroid": [-76.56753208873516, 39.28734574228092],
+      "ownerName": null
+    },
+    "predicate": "permit.last_cost_cents",
+    "value": 300000,
+    "epistemic": "fact",
+    "observedAt": "2026-07-21T00:00:00.000Z",
+    "confidence": 0.9
+  },
+  {
+    "subject": {
+      "apn": null,
+      "blocklot": "6314 045",
+      "addressLine1": "406 S CONKLING ST",
+      "addressLine2": null,
+      "city": "BALTIMORE",
+      "stateCode": "MD",
+      "postalCode": null,
+      "centroid": [-76.56753208873516, 39.28734574228092],
+      "ownerName": null
+    },
+    "predicate": "permit.last_description",
+    "value": "EXTERIOR ALTERATION TO INCLUDE ONLY Replace rear deck and stair at 406 S Conkling Street, AS PER PLANS AS PER CODE",
+    "epistemic": "fact",
+    "observedAt": "2026-07-21T00:00:00.000Z",
+    "confidence": 0.95
+  },
+  {
+    "subject": {
+      "apn": null,
+      "blocklot": "1290 021",
+      "addressLine1": "1501 E MONUMENT ST",
+      "addressLine2": null,
+      "city": "BALTIMORE",
+      "stateCode": "MD",
+      "postalCode": null,
+      "centroid": [-76.59672440326106, 39.29772988361313],
+      "ownerName": null
+    },
+    "predicate": "permit.last_issued_at",
+    "value": "2026-07-20",
+    "epistemic": "fact",
+    "observedAt": "2026-07-20T00:00:00.000Z",
+    "confidence": 0.95
+  },
+  {
+    "subject": {
+      "apn": null,
+      "blocklot": "1290 021",
+      "addressLine1": "1501 E MONUMENT ST",
+      "addressLine2": null,
+      "city": "BALTIMORE",
+      "stateCode": "MD",
+      "postalCode": null,
+      "centroid": [-76.59672440326106, 39.29772988361313],
+      "ownerName": null
+    },
+    "predicate": "permit.last_cost_cents",
+    "value": 260000000,
+    "epistemic": "fact",
+    "observedAt": "2026-07-20T00:00:00.000Z",
+    "confidence": 0.9
+  },
+  {
+    "subject": {
+      "apn": null,
+      "blocklot": "1290 021",
+      "addressLine1": "1501 E MONUMENT ST",
+      "addressLine2": null,
+      "city": "BALTIMORE",
+      "stateCode": "MD",
+      "postalCode": null,
+      "centroid": [-76.59672440326106, 39.29772988361313],
+      "ownerName": null
+    },
+    "predicate": "permit.last_description",
+    "value": "********* PARENT PERMIT BCCM-25-001028 ******* SCOPE OF WORK: ------- SITE WORK ------- hardscaping and landscaping related BCCM-25-001028 ******* loading dock under different permit BCCM-25-001028 *********** AS PER PLANS AND AS PER CODE.",
+    "epistemic": "fact",
+    "observedAt": "2026-07-20T00:00:00.000Z",
+    "confidence": 0.95
+  },
+  {
+    "subject": {
+      "apn": null,
+      "blocklot": "4953 020",
+      "addressLine1": "100 W COLD SPRING LN",
+      "addressLine2": null,
+      "city": "BALTIMORE",
+      "stateCode": "MD",
+      "postalCode": null,
+      "centroid": [-76.62544238628577, 39.346296711388504],
+      "ownerName": null
+    },
+    "predicate": "permit.last_issued_at",
+    "value": "2026-08-06",
+    "epistemic": "fact",
+    "observedAt": "2026-08-06T00:00:00.000Z",
+    "confidence": 0.95
+  },
+  {
+    "subject": {
+      "apn": null,
+      "blocklot": "4953 020",
+      "addressLine1": "100 W COLD SPRING LN",
+      "addressLine2": null,
+      "city": "BALTIMORE",
+      "stateCode": "MD",
+      "postalCode": null,
+      "centroid": [-76.62544238628577, 39.346296711388504],
+      "ownerName": null
+    },
+    "predicate": "permit.last_cost_cents",
+    "value": 2200000,
+    "epistemic": "fact",
+    "observedAt": "2026-08-06T00:00:00.000Z",
+    "confidence": 0.9
+  },
+  {
+    "subject": {
+      "apn": null,
+      "blocklot": "4953 020",
+      "addressLine1": "100 W COLD SPRING LN",
+      "addressLine2": null,
+      "city": "BALTIMORE",
+      "stateCode": "MD",
+      "postalCode": null,
+      "centroid": [-76.62544238628577, 39.346296711388504],
+      "ownerName": null
+    },
+    "predicate": "permit.last_description",
+    "value": "Revision of Fire Alarm Replacement for Permit COM2023-03182, Plan #2023-2615 as per plans as per code.",
+    "epistemic": "fact",
+    "observedAt": "2026-08-06T00:00:00.000Z",
+    "confidence": 0.95
+  },
+  {
+    "subject": {
+      "apn": null,
+      "blocklot": "3881 010",
+      "addressLine1": "3100 GREENMOUNT AVE",
+      "addressLine2": null,
+      "city": "BALTIMORE",
+      "stateCode": "MD",
+      "postalCode": null,
+      "centroid": [-76.60970784977893, 39.32625661472337],
+      "ownerName": null
+    },
+    "predicate": "permit.last_issued_at",
+    "value": "2026-07-30",
+    "epistemic": "fact",
+    "observedAt": "2026-07-30T00:00:00.000Z",
+    "confidence": 0.95
+  },
+  {
+    "subject": {
+      "apn": null,
+      "blocklot": "3881 010",
+      "addressLine1": "3100 GREENMOUNT AVE",
+      "addressLine2": null,
+      "city": "BALTIMORE",
+      "stateCode": "MD",
+      "postalCode": null,
+      "centroid": [-76.60970784977893, 39.32625661472337],
+      "ownerName": null
+    },
+    "predicate": "permit.last_cost_cents",
+    "value": 998400,
+    "epistemic": "fact",
+    "observedAt": "2026-07-30T00:00:00.000Z",
+    "confidence": 0.9
+  },
+  {
+    "subject": {
+      "apn": null,
+      "blocklot": "3881 010",
+      "addressLine1": "3100 GREENMOUNT AVE",
+      "addressLine2": null,
+      "city": "BALTIMORE",
+      "stateCode": "MD",
+      "postalCode": null,
+      "centroid": [-76.60970784977893, 39.32625661472337],
+      "ownerName": null
+    },
+    "predicate": "permit.last_description",
+    "value": "Install wet chemical Fire Suppression System on kitchen Hood",
+    "epistemic": "fact",
+    "observedAt": "2026-07-30T00:00:00.000Z",
+    "confidence": 0.95
+  }
+]
