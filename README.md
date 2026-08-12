@@ -10,12 +10,24 @@ Start with [`CLAUDE.md`](./CLAUDE.md) for the invariants, then
 
 ## Status
 
-**M0 — Repo and rails.** The workspace, strictness settings, enforcement mechanisms, and local
-infrastructure. No domain logic yet: package entry points are stubs, and each one names the
-BUILD_PLAN milestone that fills it in.
+**M0–M2, with gaps that are documented rather than hidden.**
 
-**M1 is blocked.** It requires translating `schema.sql` into a Drizzle schema, and `schema.sql`
-has not been supplied.
+- **M0** — workspace, strictness, enforcement, local infrastructure. Done.
+- **M1** — Drizzle schema (parity-checked against `schema.sql`), seed, predicate registry, fact
+  ledger, read-model projector, conflict resolution, transactional outbox. Done.
+- **M2** — address normalization, entity resolution, adapter interface and registry, ingestion
+  pipeline, cron scheduler, queue consumer, manual-upload CSV path. AT-2 passes. **Three of
+  eight adapters are written**, because the other five are blocked on sources that do not
+  verify.
+
+The blocker worth knowing about: **three of sixteen seeded sources are confirmed dead while
+still answering HTTP 200** — Foreclosure Filings (silent since 2020), Tax Sale (frozen at
+FY2021), Receivership (stopped 2021). Each feeds a signal §4.4 defines, so this is the largest
+open risk to M3's signal coverage, and it is a data problem rather than a code one.
+`docs/SOURCE_VERIFICATION.md` records what was measured, how, and on what date.
+
+Deliberate deviations from the spec live in `packages/db/DIVERGENCES.md`, each with the
+measurement that prompted it.
 
 ## Quickstart
 
