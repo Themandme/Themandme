@@ -12,3 +12,4 @@ export * from './events/index.js';
 export * from './addresses/index.js';
 export * from './resolution/index.js';
 export * from './scheduling/index.js';
+export * from './signals/index.js';
