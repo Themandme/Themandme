@@ -3,14 +3,16 @@ import {
   loadPredicateRegistry,
   loadResolutionParams,
   projectProperties,
-  recordFact,
+  recordFacts,
+  resolveProperties,
   resolveProperty,
   type PredicateRegistry,
+  type PropertyRef,
   type ResolutionParams,
 } from '@magnolia/core';
 import { markets, rawRecords, sourceFetches, sources, type Db } from '@magnolia/db';
 import type { AdapterRegistry, DataSourceAdapter } from '@magnolia/providers';
-import { and, eq, isNull, sql } from 'drizzle-orm';
+import { and, eq, inArray, isNull, sql } from 'drizzle-orm';
 import { v7 as uuidv7 } from 'uuid';
 
 /**
@@ -46,6 +48,14 @@ export interface IngestReport {
   propertiesCreated: number;
   propertiesMatched: number;
   errors: { rawRecordId: string; message: string }[];
+  /**
+   * Chunks that rolled back and were retried record by record.
+   *
+   * Surfaced rather than swallowed: a non-empty list with an empty `errors` list means the
+   * BATCHED path is broken while the sequential one still works, which is a bug that otherwise
+   * shows up only as lost performance.
+   */
+  chunkFallbacks: { records: number; message: string }[];
 }
 
 /** Stable hash of a payload: key order from the service must not create a false new record. */
@@ -150,6 +160,16 @@ export async function fetchIntoRawRecords(
   return { fetchId, fetched, banked };
 }
 
+/**
+ * Records folded into one normalize transaction.
+ *
+ * The ceiling is the batched fact insert: 500 records x 7 facts x ~14 bound columns is well
+ * inside Postgres's 65,535 parameter limit, while cutting round trips by two orders of
+ * magnitude. It is also the unit of retry — a chunk that fails is redone one record at a time,
+ * so a larger chunk means a more expensive failure.
+ */
+export const NORMALIZE_CHUNK_SIZE = 500;
+
 /** Phase 2 — normalize everything still pending for a source. Resumable. */
 export async function normalizePending(
   db: Db,
@@ -169,41 +189,36 @@ export async function normalizePending(
   let propertiesCreated = 0;
   let propertiesMatched = 0;
   const errors: { rawRecordId: string; message: string }[] = [];
+  const chunkFallbacks: { records: number; message: string }[] = [];
   const touched = new Set<string>();
 
-  for (const record of pending) {
+  type PendingRecord = (typeof pending)[number];
+
+  /**
+   * Normalize one record on its own, in its own transaction.
+   *
+   * This is the fallback the chunked path drops to when a chunk fails, and it is what preserves
+   * the property that matters most here: **one malformed record must not cost the other 499**.
+   * A chunk is one transaction, so a single bad record would otherwise roll back and re-mark all
+   * of its neighbours as pending, and the run would never make progress.
+   */
+  const normalizeOne = async (record: PendingRecord): Promise<void> => {
     try {
       await db.transaction(async (tx) => {
-        const facts = adapter.normalize({
+        const produced = adapter.normalize({
           sourceKey: adapter.key,
           sourceRecordId: record.sourceRecordId,
           payload: record.payload as Record<string, unknown>,
           observedAt: record.observedAt,
         });
 
-        /*
-         * One resolution per SUBJECT, not per fact.
-         *
-         * Adapters emit several facts about the same property from one record — VBN emits two,
-         * SDAT eight — and every one of them carried the identical `PropertyRef` through the
-         * full tier-1/tier-2/tier-3 cascade. Measured on a real VBN load: 11,536 records
-         * produced 23,072 resolutions, exactly 2.00 per record, all but 11,536 of them
-         * redundant. On SDAT's 222,703 Baltimore parcels that multiplier is eight.
-         *
-         * The memo is scoped to this record, inside this transaction, so it cannot serve a
-         * stale id across records and does not change what gets written — only how many times
-         * the same question is asked.
-         */
         const resolvedBySubject = new Map<string, string>();
+        const drafts: Parameters<typeof recordFacts>[2][number][] = [];
 
-        for (const fact of facts) {
+        for (const fact of produced) {
           const subjectKey = JSON.stringify(fact.subject);
-          const memoised = resolvedBySubject.get(subjectKey);
-
-          let propertyId: string;
-          if (memoised !== undefined) {
-            propertyId = memoised;
-          } else {
+          let propertyId = resolvedBySubject.get(subjectKey);
+          if (propertyId === undefined) {
             const resolved = await resolveProperty(tx, fact.subject, { marketId, ...resolution });
             if (resolved.created) propertiesCreated += 1;
             else propertiesMatched += 1;
@@ -212,7 +227,7 @@ export async function normalizePending(
           }
           touched.add(propertyId);
 
-          const written = await recordFact(tx, registry, {
+          drafts.push({
             subjectType: 'property',
             subjectId: propertyId,
             predicate: fact.predicate,
@@ -226,8 +241,10 @@ export async function normalizePending(
             observedAt: fact.observedAt,
             confidence: fact.confidence,
           });
-          if (written.created) factsWritten += 1;
         }
+
+        const outcome = await recordFacts(tx, registry, drafts);
+        factsWritten += outcome.created;
 
         await tx
           .update(rawRecords)
@@ -236,9 +253,8 @@ export async function normalizePending(
       });
       normalized += 1;
     } catch (error) {
-      /* One malformed record must not abort the batch — but it also must not be marked
-         normalized. It stays pending with the reason recorded, so a fix plus a re-run picks it
-         up rather than requiring a re-fetch. */
+      /* Stays pending with the reason recorded, so a fix plus a re-run picks it up rather than
+         requiring a re-fetch. */
       const message = error instanceof Error ? error.message : String(error);
       errors.push({ rawRecordId: record.id, message });
       await db
@@ -246,6 +262,129 @@ export async function normalizePending(
         .set({ normalizeError: message })
         .where(eq(rawRecords.id, record.id));
     }
+  };
+
+  /**
+   * Normalize a chunk in a single transaction, sharing every lookup across it.
+   *
+   * Per record the sequential path costs about eighteen round trips: a resolve cascade plus two
+   * per fact, and SDAT emits seven facts per record. Measured on the live 237,260-parcel load
+   * that ran at 3,324 records/min — roughly 70 minutes.
+   *
+   * Chunked, the same work is a handful of statements for the whole chunk: two resolve lookups,
+   * one source lookup, one current-fact lookup, three fact writes, one raw-record update.
+   *
+   * Returns false if the chunk failed, so the caller can retry it record by record.
+   */
+  const normalizeChunk = async (chunk: readonly PendingRecord[]): Promise<boolean> => {
+    try {
+      await db.transaction(async (tx) => {
+        /* Normalize first — pure, no I/O — so the whole chunk's references are known before a
+           single query runs. */
+        const produced = chunk.map((record) => ({
+          record,
+          facts: adapter.normalize({
+            sourceKey: adapter.key,
+            sourceRecordId: record.sourceRecordId,
+            payload: record.payload as Record<string, unknown>,
+            observedAt: record.observedAt,
+          }),
+        }));
+
+        /* One entry per DISTINCT subject across the chunk. Several records routinely name the
+           same property, and the same record names one subject in every fact it produces. */
+        const refIndex = new Map<string, number>();
+        const refs: PropertyRef[] = [];
+        for (const { facts: produced_ } of produced) {
+          for (const fact of produced_) {
+            const key = JSON.stringify(fact.subject);
+            if (!refIndex.has(key)) {
+              refIndex.set(key, refs.length);
+              refs.push(fact.subject);
+            }
+          }
+        }
+
+        const resolved = await resolveProperties(tx, refs, { marketId, ...resolution });
+        propertiesCreated += resolved.created;
+        propertiesMatched += resolved.matched;
+
+        const drafts: Parameters<typeof recordFacts>[2][number][] = [];
+        for (const { record, facts: produced_ } of produced) {
+          for (const fact of produced_) {
+            const index = refIndex.get(JSON.stringify(fact.subject));
+            const propertyId = index === undefined ? undefined : resolved.byIndex.get(index);
+            if (propertyId === undefined) {
+              throw new Error(`resolution produced no property for a subject in ${record.id}`);
+            }
+            touched.add(propertyId);
+            drafts.push({
+              subjectType: 'property',
+              subjectId: propertyId,
+              predicate: fact.predicate,
+              value: fact.value,
+              epistemic: fact.epistemic,
+              sourceId,
+              ...(record.sourceRecordId === null ? {} : { sourceRecordId: record.sourceRecordId }),
+              rawRecordId: record.id,
+              observedAt: fact.observedAt,
+              confidence: fact.confidence,
+            });
+          }
+        }
+
+        const outcome = await recordFacts(tx, registry, drafts);
+        factsWritten += outcome.created;
+
+        await tx
+          .update(rawRecords)
+          .set({ normalizedAt: new Date(), normalizeError: null })
+          .where(
+            inArray(
+              rawRecords.id,
+              chunk.map((record) => record.id),
+            ),
+          );
+      });
+      normalized += chunk.length;
+      return true;
+    } catch (error) {
+      /*
+       * Falling back is expected — one bad record in a chunk of 500 rolls the chunk back, and the
+       * per-record retry is how the other 499 still land. Falling back SILENTLY is not: a bug in
+       * the batched path would then present as "no faster than before" rather than as an error,
+       * which is exactly what a mistyped column name did here.
+       *
+       * Recorded against the chunk rather than a record, because at this point it is not known
+       * which record is at fault — the per-record retry below is what determines that.
+       */
+      chunkFallbacks.push({
+        records: chunk.length,
+        message: error instanceof Error ? error.message : String(error),
+      });
+      return false;
+    }
+  };
+
+  for (let offset = 0; offset < pending.length; offset += NORMALIZE_CHUNK_SIZE) {
+    const chunk = pending.slice(offset, offset + NORMALIZE_CHUNK_SIZE);
+
+    /* Snapshot the counters. A failed chunk rolls back in the database but not in these, and
+       the increments it made describe work that no longer exists — so they are rewound to
+       exactly this point rather than reset, which would also discard every earlier chunk. */
+    const createdBefore = propertiesCreated;
+    const matchedBefore = propertiesMatched;
+    const factsBefore = factsWritten;
+
+    if (await normalizeChunk(chunk)) continue;
+
+    propertiesCreated = createdBefore;
+    propertiesMatched = matchedBefore;
+    factsWritten = factsBefore;
+
+    /* Redo one record at a time: the survivors land, and the offender is recorded against its
+       own id rather than taking its 499 neighbours down with it. */
+    for (const record of chunk) await normalizeOne(record);
   }
 
   /* Project once per property rather than per fact — the read model is a pure function of
@@ -256,7 +395,7 @@ export async function normalizePending(
      does two queries per 500 properties instead. */
   await projectProperties(db, registry, [...touched]);
 
-  return { normalized, factsWritten, propertiesCreated, propertiesMatched, errors };
+  return { normalized, factsWritten, propertiesCreated, propertiesMatched, errors, chunkFallbacks };
 }
 
 /**

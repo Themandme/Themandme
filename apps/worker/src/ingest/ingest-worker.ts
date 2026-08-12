@@ -4,7 +4,7 @@ import type { AdapterRegistry } from '@magnolia/providers';
 import { UnrecoverableError, Worker, type Job } from 'bullmq';
 import IORedis from 'ioredis';
 import type { Logger } from '../logger.js';
-import { INGEST_QUEUE_NAME } from '../queues.js';
+import { INGEST_QUEUE_NAME, INGEST_WORKER_LOCK, queuePrefix } from '../queues.js';
 import { ingestSource, type IngestReport } from './run-ingest.js';
 
 /**
@@ -81,6 +81,16 @@ export function createIngestWorker(db: Db, options: IngestWorkerOptions): Worker
         /* Per-record normalize failures do not fail the job: the records stay pending with the
            reason recorded and the next run finishes them. Surfacing the count is what stops that
            from being silent. */
+        if (report.chunkFallbacks.length > 0) {
+          /* A fallback with no per-record errors behind it means the batched path itself is
+             broken — it would otherwise show up only as lost throughput. */
+          log.warn('ingest fell back to per-record normalization', {
+            sourceKey,
+            chunks: report.chunkFallbacks.length,
+            first: report.chunkFallbacks[0]?.message,
+          });
+        }
+
         if (report.errors.length > 0) {
           log.warn('ingest completed with per-record errors', {
             sourceKey,
@@ -108,7 +118,9 @@ export function createIngestWorker(db: Db, options: IngestWorkerOptions): Worker
     },
     {
       connection,
+      prefix: queuePrefix(),
       concurrency: options.concurrency ?? 2,
+      ...INGEST_WORKER_LOCK,
     },
   );
 

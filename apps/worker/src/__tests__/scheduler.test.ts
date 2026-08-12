@@ -4,7 +4,8 @@ import { Queue } from 'bullmq';
 import { eq } from 'drizzle-orm';
 import IORedis from 'ioredis';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { createScheduler, INGEST_QUEUE_NAME, ingestJobId, type Scheduler } from '../scheduler.js';
+import { createScheduler, ingestJobId, type Scheduler } from '../scheduler.js';
+import { INGEST_QUEUE_NAME, queuePrefix } from '../queues.js';
 
 /**
  * Scheduler wiring. BUILD_PLAN M2.1.
@@ -20,6 +21,19 @@ import { createScheduler, INGEST_QUEUE_NAME, ingestJobId, type Scheduler } from 
  */
 
 const REDIS_URL = process.env['REDIS_URL'] ?? 'redis://localhost:6379';
+
+/*
+ * This suite obliterates the queue between tests, so it must NOT share a namespace with anything
+ * else on the Redis it points at.
+ *
+ * `queuePrefix()` reads the environment when a queue is constructed, not when the module loads,
+ * which is what makes setting it here work at all — ESM hoists imports, so this assignment runs
+ * after `queues.js` has already been evaluated.
+ *
+ * Learned the hard way: running this against a live worker's Redis destroyed the lock on an
+ * in-flight 237,260-record ingest and killed the job mid-run.
+ */
+process.env['MAGNOLIA_QUEUE_PREFIX'] = 'magnolia-test';
 
 let harness: TestDb | undefined;
 let db: Db;
@@ -62,7 +76,7 @@ beforeAll(async () => {
   await seed(db);
 
   connection = new IORedis(REDIS_URL, { maxRetriesPerRequest: null });
-  queue = new Queue(INGEST_QUEUE_NAME, { connection });
+  queue = new Queue(INGEST_QUEUE_NAME, { connection, prefix: queuePrefix() });
   scheduler = createScheduler(db, { redisUrl: REDIS_URL });
 }, 60_000);
 

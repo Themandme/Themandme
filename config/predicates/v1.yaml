@@ -42,6 +42,11 @@ predicates:
       minimum: 1600
       maximum: 2100
 
+  # Ceiling raised from 1,000,000 on 2026-08-12. Eleven Baltimore parcels exceed the old cap and
+  # every one is a real building — 22 S Greene St (University of Maryland Medical Center,
+  # 1,871,691 sqft), 600 N Wolfe St (Johns Hopkins Hospital, 1,459,459), and similar hospital and
+  # campus complexes. The old value rejected them as garbage, which cost the whole record. A
+  # ceiling still exists, an order of magnitude up, so genuinely absurd values are still caught.
   - key: property.building_sqft
     subject: property
     volatility: durable
@@ -52,7 +57,7 @@ predicates:
     value_schema:
       type: integer
       minimum: 0
-      maximum: 1000000
+      maximum: 10000000
 
   - key: property.lot_sqft
     subject: property

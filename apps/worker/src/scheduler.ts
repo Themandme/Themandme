@@ -2,7 +2,7 @@ import { classifySources, dueNow, formatSchedule, type SourceSchedule } from '@m
 import type { Db } from '@magnolia/db';
 import { Queue } from 'bullmq';
 import IORedis from 'ioredis';
-import { INGEST_JOB_OPTIONS, INGEST_QUEUE_NAME } from './queues.js';
+import { INGEST_JOB_OPTIONS, INGEST_QUEUE_NAME, queuePrefix } from './queues.js';
 
 /**
  * Ingestion scheduler. BUILD_PLAN M2.1.
@@ -59,7 +59,7 @@ export function createScheduler(db: Db, options: SchedulerOptions): Scheduler {
     /* BullMQ requires this; without it a blocked command throws on the first stall. */
     maxRetriesPerRequest: null,
   });
-  const queue = new Queue(INGEST_QUEUE_NAME, { connection });
+  const queue = new Queue(INGEST_QUEUE_NAME, { connection, prefix: queuePrefix() });
   const sweepIntervalMs = options.sweepIntervalMs ?? 60_000;
 
   let running = false;

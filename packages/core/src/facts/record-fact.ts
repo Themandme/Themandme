@@ -1,5 +1,5 @@
 import { facts, sources, type Db } from '@magnolia/db';
-import { and, eq, sql } from 'drizzle-orm';
+import { and, eq, getTableColumns, inArray, sql } from 'drizzle-orm';
 import { v7 as uuidv7 } from 'uuid';
 import type { PredicateRegistry } from './predicate-registry.js';
 
@@ -277,4 +277,260 @@ export async function currentFactsFor(
         eq(facts.isCurrent, true),
       ),
     );
+}
+
+/* ── Batched writes ──────────────────────────────────────────────────────────────────────
+ *
+ * `recordFact` costs two to four round trips per fact: a source lookup, a lookup of the current
+ * fact, then the insert and (when superseding) two more statements. Measured on the live SDAT
+ * load that dominates ingestion — each record produces seven facts, so normalization ran at
+ * 3,324 records/min and a full 237,260-parcel load needed roughly 70 minutes.
+ *
+ * `recordFacts` does the same work for a whole chunk in **five statements total**, regardless of
+ * chunk size: one source lookup, one current-fact lookup, then the same three writes the
+ * supersede ordering requires.
+ *
+ * Every check `recordFact` performs is performed here too — predicate and value schema,
+ * confidence range, the epistemic rule against source tier, the identical-write short circuit,
+ * and the observation-time guard. This function must not be a weaker door into the ledger than
+ * the single-fact one; a batched path that skipped a validation would be a way to write facts
+ * that `recordFact` would have refused.
+ */
+
+export interface BatchOutcome {
+  created: number;
+  /** Identical repeats and later-arriving older observations. */
+  skipped: number;
+  superseded: number;
+}
+
+/** `${subjectType}|${subjectId}|${predicate}|${sourceId}` — the uniqueness key of a current fact. */
+function currentKey(d: {
+  subjectType: string;
+  subjectId: string;
+  predicate: string;
+  sourceId: string;
+}): string {
+  return `${d.subjectType}|${d.subjectId}|${d.predicate}|${d.sourceId}`;
+}
+
+export async function recordFacts(
+  tx: DbOrTx,
+  registry: PredicateRegistry,
+  drafts: readonly FactDraft[],
+): Promise<BatchOutcome> {
+  if (drafts.length === 0) return { created: 0, skipped: 0, superseded: 0 };
+
+  /*
+   * Two drafts in one chunk for the same (subject, predicate, source) form a supersede CHAIN:
+   * the second has to point at the first, which has to exist first. That cannot be expressed in
+   * one batched insert, and collapsing the chain would silently drop a row of history.
+   *
+   * Rather than approximate it, those keys are routed through `recordFact` one at a time and the
+   * rest are batched. Repeats are rare in practice — each raw record is a distinct property — so
+   * this costs almost nothing while keeping the batched path's history byte-identical to the
+   * sequential one.
+   */
+  const countByKey = new Map<string, number>();
+  for (const draft of drafts) {
+    const key = currentKey(draft);
+    countByKey.set(key, (countByKey.get(key) ?? 0) + 1);
+  }
+  const sequential = drafts.filter((d) => (countByKey.get(currentKey(d)) ?? 0) > 1);
+  const batchable = drafts.filter((d) => (countByKey.get(currentKey(d)) ?? 0) === 1);
+
+  let created = 0;
+  let skipped = 0;
+  let superseded = 0;
+
+  for (const draft of sequential) {
+    const result = await recordFact(tx, registry, draft);
+    if (result.created) created += 1;
+    else skipped += 1;
+    if (result.supersededFactId !== null) superseded += 1;
+  }
+
+  if (batchable.length === 0) return { created, skipped, superseded };
+
+  /* 1. Validation, in memory. Same calls, same order, same errors as `recordFact`. */
+  const definitions = new Map<string, ReturnType<PredicateRegistry['assert']>>();
+  for (const draft of batchable) {
+    definitions.set(draft.predicate, registry.assert(draft.predicate, draft.value));
+    if (!Number.isFinite(draft.confidence) || draft.confidence < 0 || draft.confidence > 1) {
+      throw new RangeError(
+        `confidence must be in [0,1], received ${String(draft.confidence)} for "${draft.predicate}"`,
+      );
+    }
+  }
+
+  /* 2. One source lookup for the whole chunk. */
+  const sourceIds = [...new Set(batchable.map((d) => d.sourceId))];
+  const sourceRows = await tx
+    .select({ id: sources.id, tier: sources.tier })
+    .from(sources)
+    .where(inArray(sources.id, sourceIds));
+  const tierById = new Map(sourceRows.map((row) => [row.id, row.tier]));
+
+  for (const draft of batchable) {
+    const tier = tierById.get(draft.sourceId);
+    if (tier === undefined) throw new UnknownSourceError(draft.sourceId);
+    if (draft.epistemic === 'fact' && !TIERS_THAT_MAY_ASSERT_FACT.has(tier)) {
+      throw new EpistemicViolationError(
+        `Source tier "${tier}" may not write epistemic='fact' for "${draft.predicate}". ` +
+          `Spec §4.1 rule 3 restricts 'fact' to official_record, commercial_data and human.`,
+      );
+    }
+    if (tier === 'ai_inference' && draft.epistemic !== 'inference') {
+      throw new EpistemicViolationError(
+        `Source tier "ai_inference" must write epistemic='inference', not ` +
+          `'${draft.epistemic}'. CLAUDE.md invariant 2: LLM output is always inference.`,
+      );
+    }
+  }
+
+  /*
+   * 3. One lookup of the current facts this chunk might supersede.
+   *
+   * Filtered by the three columns of `facts_one_current_per_source` that are cheap to express as
+   * sets. That is a superset of the exact tuple list — it can return a fact for a
+   * subject/predicate combination no draft actually touches — so the result is keyed and matched
+   * exactly below rather than being trusted as-is.
+   */
+  const existingRows = await tx
+    .select({
+      id: facts.id,
+      subjectType: facts.subjectType,
+      subjectId: facts.subjectId,
+      predicate: facts.predicate,
+      sourceId: facts.sourceId,
+      value: facts.value,
+      epistemic: facts.epistemic,
+      observedAt: facts.observedAt,
+      confidence: facts.confidence,
+    })
+    .from(facts)
+    .where(
+      and(
+        /*
+         * `subject_type` FIRST, and it is not optional.
+         *
+         * `facts_one_current_per_source` is
+         * `(subject_type, subject_id, predicate, source_id) WHERE is_current`. Leaving the
+         * LEADING column unconstrained makes the index unusable and Postgres falls back to a
+         * sequential scan of the whole table — measured at 323,343 rows and 9,418 shared buffers
+         * per chunk on a half-loaded `facts`, and growing with every chunk written. Adding it
+         * takes the same query to an index-driven nested loop at 2,175 buffers.
+         *
+         * `recordFact` gets this for free because it filters on one exact tuple. The batched
+         * version has to say it explicitly, and forgetting to is invisible in every test — the
+         * results are identical, only the plan is different.
+         */
+        inArray(facts.subjectType, [...new Set(batchable.map((d) => d.subjectType))]),
+        inArray(facts.subjectId, [...new Set(batchable.map((d) => d.subjectId))]),
+        inArray(facts.predicate, [...new Set(batchable.map((d) => d.predicate))]),
+        inArray(facts.sourceId, sourceIds),
+        eq(facts.isCurrent, true),
+      ),
+    );
+  const existingByKey = new Map(existingRows.map((row) => [currentKey(row), row]));
+
+  /* 4. Decide. Identical writes and older observations are dropped, exactly as in `recordFact`. */
+  const toInsert: { draft: FactDraft; id: string; supersedes: string | null }[] = [];
+
+  for (const draft of batchable) {
+    const existing = existingByKey.get(currentKey(draft));
+
+    if (existing !== undefined) {
+      const identical =
+        sameJson(existing.value, draft.value) &&
+        existing.epistemic === draft.epistemic &&
+        existing.observedAt.getTime() === draft.observedAt.getTime() &&
+        existing.confidence === draft.confidence;
+      if (identical) {
+        skipped += 1;
+        continue;
+      }
+      /* Supersede on observation time, not arrival time — see the note in `recordFact`. */
+      if (draft.observedAt.getTime() < existing.observedAt.getTime()) {
+        skipped += 1;
+        continue;
+      }
+    }
+
+    toInsert.push({ draft, id: uuidv7(), supersedes: existing?.id ?? null });
+  }
+
+  if (toInsert.length === 0) return { created, skipped, superseded };
+
+  /*
+   * 5. The three writes, in the order the constraints force — the same ordering `recordFact`
+   *    documents, just applied to a whole chunk at once:
+   *
+   *      a. clear `is_current` on every row being superseded, because
+   *         `facts_one_current_per_source` would reject the inserts otherwise;
+   *      b. insert the new rows;
+   *      c. point the old rows at the new ones, which needs the new rows to exist.
+   */
+  const supersededIds = toInsert
+    .map((entry) => entry.supersedes)
+    .filter((id): id is string => id !== null);
+
+  if (supersededIds.length > 0) {
+    await tx.update(facts).set({ isCurrent: false }).where(inArray(facts.id, supersededIds));
+  }
+
+  await tx.insert(facts).values(
+    toInsert.map(({ draft, id }) => {
+      const definition = definitions.get(draft.predicate);
+      const expiresAt =
+        definition?.defaultTtlDays == null
+          ? null
+          : new Date(draft.observedAt.getTime() + definition.defaultTtlDays * 86_400_000);
+      return {
+        id,
+        subjectType: draft.subjectType,
+        subjectId: draft.subjectId,
+        predicate: draft.predicate,
+        value: draft.value,
+        epistemic: draft.epistemic,
+        sourceId: draft.sourceId,
+        sourceRecordId: draft.sourceRecordId ?? null,
+        rawRecordId: draft.rawRecordId ?? null,
+        derivedFrom: draft.derivedFrom ?? null,
+        observedAt: draft.observedAt,
+        expiresAt,
+        confidence: draft.confidence,
+        costCents: draft.costCents ?? 0,
+        isCurrent: true,
+      };
+    }),
+  );
+
+  const links = toInsert.filter(
+    (entry): entry is { draft: FactDraft; id: string; supersedes: string } =>
+      entry.supersedes !== null,
+  );
+  if (links.length > 0) {
+    /*
+     * The column name is taken from the Drizzle definition, NOT written literally.
+     *
+     * `facts.superseded` is a TypeScript alias for the column `superseded_by`, and raw SQL sees
+     * only the real name. Hand-writing `SET superseded = …` here failed on every chunk that had
+     * anything to supersede — and because the chunk fallback swallowed the reason, the symptom
+     * was not an error but a batched path that quietly performed no better than the sequential
+     * one it replaced. Deriving the name means a future rename cannot reintroduce that.
+     */
+    const supersededColumn = getTableColumns(facts).superseded.name;
+    const tuples = links.map((entry) => sql`(${entry.supersedes}::uuid, ${entry.id}::uuid)`);
+    await tx.execute(sql`
+      UPDATE ${facts}
+      SET ${sql.identifier(supersededColumn)} = v.new_id
+      FROM (VALUES ${sql.join(tuples, sql`, `)}) AS v(old_id, new_id)
+      WHERE ${facts.id} = v.old_id
+    `);
+  }
+
+  created += toInsert.length;
+  superseded += links.length;
+  return { created, skipped, superseded };
 }

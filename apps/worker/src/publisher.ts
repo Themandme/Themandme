@@ -2,7 +2,7 @@ import { publishBatch, type OutboxEvent, type PublishOutcome } from '@magnolia/c
 import type { Db } from '@magnolia/db';
 import { Queue } from 'bullmq';
 import IORedis from 'ioredis';
-import { OUTBOX_QUEUE_NAME } from './queues.js';
+import { OUTBOX_QUEUE_NAME, queuePrefix } from './queues.js';
 
 /**
  * Outbox publisher. BUILD_PLAN M1.6.
@@ -35,7 +35,7 @@ export function createPublisher(db: Db, options: PublisherOptions): Publisher {
     /* BullMQ requires this; without it a blocked command throws on the first stall. */
     maxRetriesPerRequest: null,
   });
-  const queue = new Queue(OUTBOX_QUEUE_NAME, { connection });
+  const queue = new Queue(OUTBOX_QUEUE_NAME, { connection, prefix: queuePrefix() });
 
   const batchSize = options.batchSize ?? 100;
   const idleDelayMs = options.idleDelayMs ?? 1000;

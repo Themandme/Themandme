@@ -136,7 +136,24 @@ export function normalizeSdatParcelPoint(raw: RawRecord): NormalizedFact[] {
   const ownerLine1 = asString(attributes['OWNADD1']);
   const ownerCity = asString(attributes['OWNCITY']);
   const ownerState = asString(attributes['OWNSTATE']);
-  const ownerZip = asString(attributes['OWNERZIP']);
+  /*
+   * SDAT's `OWNERZIP` is not always a ZIP. On 0.51% of Baltimore records (1,201 of 237,260) it is
+   * blank or shorter than five characters, and the `owner.mailing_address` schema requires five.
+   *
+   * The fix belongs HERE rather than in the schema. A short ZIP is missing data, and a record
+   * with missing data should produce fewer facts, not an invalid one — spec §9.1 makes
+   * `normalize` the place where a source's quirks are absorbed. Emitting it and letting
+   * `recordFact` reject it turns one bad field into a whole rejected record, and in the batched
+   * write path it also rolled back the record's 499 blameless neighbours: at 0.51% incidence,
+   * **92% of 500-record chunks contained at least one**, so essentially every chunk fell back to
+   * the sequential path and the batching bought nothing.
+   *
+   * Loosening the schema to `minLength: 0` was the other option and is worse — `postal_code` is
+   * required precisely because mail goes to it.
+   */
+  const rawZip = asString(attributes['OWNERZIP']);
+  const ownerZip = rawZip !== null && rawZip.trim().length >= 5 ? rawZip.trim() : null;
+
   if (ownerLine1 !== null && ownerCity !== null && ownerState !== null && ownerZip !== null) {
     /* Normalized here so `owner.absentee` can compare it to the property address without
        re-parsing, and so the same mailing address from two sources compares equal. */
